@@ -21,17 +21,18 @@ class ControllerConfig:
     waypoint_tolerance: float = 0.70
     final_waypoint_tolerance: float = 0.70
 
-    clear_path_speed: float = 0.75
-    avoidance_speed_limit: float = 0.45
-    corner_speed_limit: float = 0.35
-    minimum_avoidance_speed: float = 0.15
+    clear_path_speed: float = 3.50
+    avoidance_speed_limit: float = 1.20
+    corner_speed_limit: float = 0.70
+    minimum_avoidance_speed: float = 0.40
 
-    acceleration_rate: float = 0.30
-    deceleration_rate: float = 0.90
+    acceleration_rate: float = 0.90
+    deceleration_rate: float = 2.00
+    
     max_yaw_rate: float = 0.80
 
-    stop_distance: float = 1.20
-    safe_distance: float = 4.50
+    stop_distance: float = 2.00
+    safe_distance: float = 7.00
     self_hit_distance: float = 0.25
 
     sector_size_deg: float = 5.0
@@ -465,11 +466,19 @@ class WaypointVfhController(Node):
                 target_speed,
                 self.config.avoidance_speed_limit,
             )
-            target_speed = max(
-                target_speed,
-                self.config.minimum_avoidance_speed,
-            )
 
+            # Do not crawl unless the obstacle is genuinely close.
+            if front_clearance > 2.0:
+                target_speed = max(
+                    target_speed,
+                    0.40,
+                )
+            else:
+                target_speed = max(
+                    target_speed,
+                    self.config.minimum_avoidance_speed,
+                )
+                
         if waypoint_distance < 1.2:
             target_speed = min(target_speed, 0.35)
 
