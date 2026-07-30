@@ -21,18 +21,18 @@ class ControllerConfig:
     waypoint_tolerance: float = 0.70
     final_waypoint_tolerance: float = 0.70
 
-    clear_path_speed: float = 3.50
-    avoidance_speed_limit: float = 1.20
-    corner_speed_limit: float = 0.70
-    minimum_avoidance_speed: float = 0.40
+    clear_path_speed: float = 2.00
+    avoidance_speed_limit: float = 0.90
+    corner_speed_limit: float = 0.80
+    minimum_avoidance_speed: float = 0.35
 
     acceleration_rate: float = 0.90
     deceleration_rate: float = 2.00
     
-    max_yaw_rate: float = 0.80
+    max_yaw_rate: float = 1.00
 
-    stop_distance: float = 2.00
-    safe_distance: float = 7.00
+    stop_distance: float = 1.80
+    safe_distance: float = 6.00
     self_hit_distance: float = 0.25
 
     sector_size_deg: float = 5.0
@@ -249,17 +249,22 @@ class WaypointVfhController(Node):
         self.config = ControllerConfig()
 
         self.waypoints = [
-            (3.0, 0.0), (9.0, 0.0), (15.0, 0.0), (21.0, 0.0), (26.0, 0.0),
-            (27.5, 0.4), (28.7, 1.2), (29.5, 2.2), (30.0, 3.5),
-            (30.0, 6.0), (30.0, 9.0),
-            (29.7, 10.2), (29.0, 11.0), (28.0, 11.7), (26.5, 12.0),
-            (22.0, 12.0), (18.0, 12.0), (12.0, 12.0), (6.0, 12.0), (3.0, 12.0),
-            (1.8, 11.7), (0.9, 11.0), (0.3, 10.0), (0.0, 8.5),
-            (0.0, 6.0), (0.0, 3.0),
-            (0.3, 1.8), (1.0, 0.9), (2.0, 0.3), (3.5, 0.0),
-            (9.0, 0.0),
-        ]
+            (3.5, 0.0),
+            (8.0, 0.0),
+            (12.0, 0.0),
+            (15.5, 0.0),
 
+            # Smoother left turn
+            (16.7, 0.3),
+            (17.5, 1.0),
+            (18.0, 2.0),
+            (18.0, 3.5),
+
+            # Vertical corridor
+            (18.0, 6.0),
+            (18.0, 9.0),
+        ]        
+        
         self.current_waypoint_index = 0
         self.finished = False
 
@@ -449,15 +454,18 @@ class WaypointVfhController(Node):
                 self.config.safe_distance - self.config.stop_distance
             )
 
-        if heading_error > math.radians(40.0):
-            target_speed = 0.0
-        elif heading_error > math.radians(25.0):
-            target_speed = 0.15
-        elif heading_error > math.radians(12.0):
-            target_speed = 0.30
+        if heading_error > math.radians(55.0):
+            target_speed = 0.10
+
+        elif heading_error > math.radians(35.0):
+            target_speed = 0.25
+
+        elif heading_error > math.radians(18.0):
+            target_speed = 0.45
+
         else:
             target_speed = self.config.clear_path_speed
-
+            
         target_speed *= distance_factor
         target_speed *= 1.0 - 0.65 * steering_ratio
 
@@ -483,10 +491,7 @@ class WaypointVfhController(Node):
             target_speed = min(target_speed, 0.35)
 
         if self.current_waypoint_index in {
-            5, 6, 7, 8,
-            11, 12, 13, 14,
-            20, 21, 22, 23,
-            26, 27, 28, 29,
+            4, 5, 6, 7
         }:
             target_speed = min(
                 target_speed,

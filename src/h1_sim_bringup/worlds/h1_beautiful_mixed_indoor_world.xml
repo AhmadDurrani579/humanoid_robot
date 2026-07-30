@@ -1,0 +1,121 @@
+<mujoco model="H1 Beautiful Mixed Indoor Research World">
+  <include file="h1.xml"/>
+
+  <statistic center="10 4 1.6" extent="27"/>
+
+  <visual>
+    <headlight diffuse="0.62 0.62 0.62" ambient="0.20 0.20 0.22" specular="0.75 0.75 0.75"/>
+    <rgba haze="0.11 0.14 0.18 1"/>
+    <global azimuth="-125" elevation="-28"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.20 0.34 0.50" rgb2="0.035 0.045 0.065" width="512" height="3072"/>
+    <texture type="2d" name="floor_tex" builtin="checker" rgb1="0.36 0.37 0.39" rgb2="0.42 0.43 0.45" mark="edge" markrgb="0.48 0.49 0.51" width="1024" height="1024"/>
+    <texture type="2d" name="wood_tex" builtin="checker" rgb1="0.36 0.20 0.10" rgb2="0.48 0.28 0.14" width="512" height="512"/>
+    <texture type="2d" name="tile_tex" builtin="checker" rgb1="0.64 0.68 0.72" rgb2="0.77 0.80 0.83" width="512" height="512"/>
+    <material name="floor_mat" texture="floor_tex" texuniform="true" texrepeat="22 18" reflectance="0.08"/>
+    <material name="wood_mat" texture="wood_tex" texuniform="true" texrepeat="8 8" reflectance="0.05"/>
+    <material name="tile_mat" texture="tile_tex" texuniform="true" texrepeat="10 10" reflectance="0.10"/>
+  </asset>
+
+  <worldbody>
+    <light pos="0 0 12" dir="0 0 -1" directional="true" diffuse="0.78 0.80 0.84"/>
+    <light pos="10 4 9" dir="0 0 -1" diffuse="0.62 0.65 0.70"/>
+    <light pos="22 8 8" dir="0 0 -1" diffuse="0.55 0.58 0.62"/>
+
+    <geom name="main_floor" type="plane" size="38 30 0.05" material="floor_mat" friction="1.0 0.1 0.1"/>
+    <geom name="lobby_floor" type="box" pos="0 0 0.01" size="5.5 4.5 0.01" material="tile_mat" contype="0" conaffinity="0"/>
+    <geom name="main_corridor_floor" type="box" pos="11 0 0.012" size="10.5 2.25 0.01" rgba="0.23 0.26 0.30 1" contype="0" conaffinity="0"/>
+    <geom name="top_corridor_floor" type="box" pos="18 7 0.012" size="2.25 5.0 0.01" rgba="0.24 0.27 0.31 1" contype="0" conaffinity="0"/>
+
+    <!-- Outer building -->
+    <geom name="outer_wall_south" type="box" pos="12 -12 1.5" size="18 0.20 1.5" rgba="0.78 0.80 0.84 1"/>
+    <geom name="outer_wall_north" type="box" pos="12 18 1.5" size="18 0.20 1.5" rgba="0.78 0.80 0.84 1"/>
+    <geom name="outer_wall_west" type="box" pos="-6 3 1.5" size="0.20 15 1.5" rgba="0.78 0.80 0.84 1"/>
+    <geom name="outer_wall_east" type="box" pos="30 3 1.5" size="0.20 15 1.5" rgba="0.78 0.80 0.84 1"/>
+
+    <!-- Lobby partitions; robot starts near (0,0) -->
+    <geom name="lobby_north_left" type="box" pos="-2.5 5.0 1.5" size="3.5 0.15 1.5" rgba="0.86 0.87 0.89 1"/>
+    <geom name="lobby_north_right" type="box" pos="4.0 5.0 1.5" size="2.0 0.15 1.5" rgba="0.86 0.87 0.89 1"/>
+    <geom name="lobby_south_left" type="box" pos="-2.0 -5.0 1.5" size="4.0 0.15 1.5" rgba="0.86 0.87 0.89 1"/>
+    <geom name="lobby_south_right" type="box" pos="4.5 -5.0 1.5" size="1.5 0.15 1.5" rgba="0.86 0.87 0.89 1"/>
+
+    <!-- Main corridor -->
+    <geom name="corridor_north_1" type="box" pos="10 2.25 1.5" size="4.5 0.15 1.5" rgba="0.74 0.77 0.81 1"/>
+    <geom name="corridor_north_2" type="box" pos="15.8 2.25 1.5" size="1.3 0.15 1.5" rgba="0.74 0.77 0.81 1"/>
+    <geom name="corridor_north_3" type="box" pos="22.5 2.25 1.5" size="4.0 0.15 1.5" rgba="0.74 0.77 0.81 1"/>
+    <geom name="corridor_south_1" type="box" pos="10 -2.25 1.5" size="4.5 0.15 1.5" rgba="0.74 0.77 0.81 1"/>
+    <geom name="corridor_south_2" type="box" pos="17 -2.25 1.5" size="1.5 0.15 1.5" rgba="0.74 0.77 0.81 1"/>
+    <geom name="corridor_south_3" type="box" pos="25 -2.25 1.5" size="3.0 0.15 1.5" rgba="0.74 0.77 0.81 1"/>
+    <geom name="corridor_east_end" type="box" pos="26.5 0 1.5" size="0.15 2.25 1.5" rgba="0.74 0.77 0.81 1"/>
+
+    <!-- Vertical corridor and T-junction -->
+    <geom name="vertical_west_1" type="box" pos="15.75 5.2 1.5" size="0.15 2.95 1.5" rgba="0.72 0.75 0.80 1"/>
+    <geom name="vertical_west_2" type="box" pos="15.75 10.6 1.5" size="0.15 1.4 1.5" rgba="0.72 0.75 0.80 1"/>
+    <geom name="vertical_east_1" type="box" pos="20.25 5.2 1.5" size="0.15 2.95 1.5" rgba="0.72 0.75 0.80 1"/>
+    <geom name="vertical_east_2" type="box" pos="20.25 10.6 1.5" size="0.15 1.4 1.5" rgba="0.72 0.75 0.80 1"/>
+    <geom name="t_junction_left" type="box" pos="13.0 12.0 1.5" size="2.75 0.15 1.5" rgba="0.72 0.75 0.80 1"/>
+    <geom name="t_junction_right" type="box" pos="24.5 12.0 1.5" size="4.25 0.15 1.5" rgba="0.72 0.75 0.80 1"/>
+
+    <!-- Room A -->
+    <geom name="room_a_east_1" type="box" pos="7 8.0 1.5" size="0.15 3.0 1.5" rgba="0.88 0.84 0.80 1"/>
+    <geom name="room_a_east_2" type="box" pos="7 15.2 1.5" size="0.15 2.8 1.5" rgba="0.88 0.84 0.80 1"/>
+    <geom name="room_a_south" type="box" pos="1.0 5.0 1.5" size="5.0 0.15 1.5" rgba="0.88 0.84 0.80 1"/>
+    <geom name="meeting_table_top" type="box" pos="0.5 11.0 0.75" size="2.2 1.0 0.10" material="wood_mat"/>
+    <geom name="meeting_table_leg_1" type="cylinder" pos="-1.0 10.4 0.38" size="0.10 0.38" rgba="0.18 0.18 0.20 1"/>
+    <geom name="meeting_table_leg_2" type="cylinder" pos="2.0 10.4 0.38" size="0.10 0.38" rgba="0.18 0.18 0.20 1"/>
+    <geom name="meeting_table_leg_3" type="cylinder" pos="-1.0 11.6 0.38" size="0.10 0.38" rgba="0.18 0.18 0.20 1"/>
+    <geom name="meeting_table_leg_4" type="cylinder" pos="2.0 11.6 0.38" size="0.10 0.38" rgba="0.18 0.18 0.20 1"/>
+    <geom name="sofa_base" type="box" pos="-2.5 15.4 0.45" size="2.1 0.70 0.45" rgba="0.16 0.36 0.58 1"/>
+    <geom name="sofa_back" type="box" pos="-2.5 16.0 1.0" size="2.1 0.15 0.75" rgba="0.13 0.30 0.50 1"/>
+
+    <!-- Room B lab -->
+    <geom name="lab_west_wall" type="box" pos="7 -7.1 1.5" size="0.15 4.9 1.5" rgba="0.80 0.84 0.86 1"/>
+    <geom name="lab_internal_wall_1" type="box" pos="17 -5.3 1.5" size="0.15 3.2 1.5" rgba="0.80 0.84 0.86 1"/>
+    <geom name="lab_internal_wall_2" type="box" pos="17 -10.8 1.5" size="0.15 1.2 1.5" rgba="0.80 0.84 0.86 1"/>
+    <geom name="lab_bench_1" type="box" pos="11 -8.5 0.85" size="2.3 0.65 0.12" material="wood_mat"/>
+    <geom name="lab_bench_2" type="box" pos="23.5 -7.5 0.85" size="2.5 0.65 0.12" material="wood_mat"/>
+    <geom name="lab_cabinet_1" type="box" pos="28.3 -9.0 1.0" size="0.65 2.0 1.0" rgba="0.28 0.34 0.40 1"/>
+
+    <!-- Room C -->
+    <geom name="room_c_mid_wall_1" type="box" pos="24.0 7.3 1.5" size="3.7 0.15 1.5" rgba="0.86 0.82 0.78 1"/>
+    <geom name="room_c_mid_wall_2" type="box" pos="29.0 7.3 1.5" size="1.0 0.15 1.5" rgba="0.86 0.82 0.78 1"/>
+    <geom name="office_desk" type="box" pos="25.0 4.7 0.78" size="2.1 0.70 0.10" material="wood_mat"/>
+    <geom name="office_storage" type="box" pos="28.7 4.8 1.0" size="0.75 1.2 1.0" rgba="0.38 0.28 0.20 1"/>
+    <geom name="small_sofa" type="box" pos="25.5 9.6 0.45" size="1.8 0.70 0.45" rgba="0.46 0.22 0.40 1"/>
+    <geom name="small_sofa_back" type="box" pos="25.5 10.2 1.0" size="1.8 0.15 0.75" rgba="0.38 0.16 0.34 1"/>
+
+    <!-- Narrow passage and dead end -->
+    <geom name="narrow_left" type="box" pos="8.2 14.9 1.5" size="0.15 3.0 1.5" rgba="0.76 0.80 0.84 1"/>
+    <geom name="narrow_right" type="box" pos="11.2 14.9 1.5" size="0.15 3.0 1.5" rgba="0.76 0.80 0.84 1"/>
+    <geom name="dead_end_wall" type="box" pos="9.7 17.8 1.5" size="1.5 0.15 1.5" rgba="0.72 0.76 0.82 1"/>
+
+    <!-- Decorative plants and art -->
+    <geom name="plant_pot_1" type="cylinder" pos="-4.5 3.5 0.35" size="0.35 0.35" rgba="0.48 0.26 0.12 1"/>
+    <geom name="plant_leaf_1" type="sphere" pos="-4.5 3.5 0.95" size="0.55" rgba="0.12 0.48 0.22 1" contype="0" conaffinity="0"/>
+    <geom name="plant_pot_2" type="cylinder" pos="28.0 14.8 0.35" size="0.35 0.35" rgba="0.48 0.26 0.12 1"/>
+    <geom name="plant_leaf_2" type="sphere" pos="28.0 14.8 0.95" size="0.55" rgba="0.14 0.54 0.26 1" contype="0" conaffinity="0"/>
+    <geom name="art_panel_blue" type="box" pos="-5.78 11.0 1.65" size="0.02 1.4 0.9" rgba="0.10 0.38 0.76 1" contype="0" conaffinity="0"/>
+    <geom name="art_panel_gold" type="box" pos="29.78 14.0 1.65" size="0.02 1.4 0.9" rgba="0.88 0.56 0.14 1" contype="0" conaffinity="0"/>
+    <geom name="light_strip_main" type="box" pos="11 0 2.95" size="10 0.05 0.03" rgba="0.90 0.95 1.00 1" contype="0" conaffinity="0"/>
+    <geom name="light_strip_vertical" type="box" pos="18 7 2.95" size="0.05 4.5 0.03" rgba="0.90 0.95 1.00 1" contype="0" conaffinity="0"/>
+
+    <!-- Visual goals -->
+    <geom name="goal_lobby" type="sphere" pos="3.5 0 0.10" size="0.16" rgba="0.10 1.00 0.30 0.85" contype="0" conaffinity="0"/>
+    <geom name="goal_corridor_mid" type="sphere" pos="12 0 0.10" size="0.16" rgba="0.00 0.85 1.00 0.85" contype="0" conaffinity="0"/>
+    <geom name="goal_t_junction" type="sphere" pos="18 5.5 0.10" size="0.16" rgba="0.00 0.85 1.00 0.85" contype="0" conaffinity="0"/>
+    <geom name="goal_room_a" type="sphere" pos="3.0 12.0 0.10" size="0.16" rgba="1.00 0.50 0.10 0.85" contype="0" conaffinity="0"/>
+    <geom name="goal_room_b" type="sphere" pos="24.0 -8.5 0.10" size="0.16" rgba="1.00 0.20 0.20 0.85" contype="0" conaffinity="0"/>
+    <geom name="goal_room_c" type="sphere" pos="25.0 9.5 0.10" size="0.16" rgba="0.75 0.25 1.00 0.85" contype="0" conaffinity="0"/>
+    <geom name="goal_dead_end" type="sphere" pos="9.7 16.6 0.10" size="0.16" rgba="1.00 0.85 0.10 0.85" contype="0" conaffinity="0"/>
+
+    <!-- Optional test obstacles; uncomment after validating the world -->
+    <!--
+    <geom name="test_box_corridor" type="box" pos="10.5 0.8 0.65" size="0.55 0.55 0.65" rgba="0.90 0.18 0.16 1"/>
+    <geom name="test_cylinder_vertical" type="cylinder" pos="18.8 7.2 0.65" size="0.50 0.65" rgba="0.14 0.42 0.90 1"/>
+    <geom name="test_box_room_b" type="box" pos="21.0 -6.5 0.65" size="0.55 0.55 0.65" rgba="0.12 0.72 0.34 1"/>
+    <geom name="test_box_room_c" type="box" pos="23.0 8.5 0.65" size="0.55 0.55 0.65" rgba="0.78 0.22 0.70 1"/>
+    -->
+  </worldbody>
+</mujoco>
