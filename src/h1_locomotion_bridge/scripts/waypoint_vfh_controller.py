@@ -21,15 +21,15 @@ class ControllerConfig:
     waypoint_tolerance: float = 0.70
     final_waypoint_tolerance: float = 0.70
 
-    clear_path_speed: float = 2.00
-    avoidance_speed_limit: float = 0.90
-    corner_speed_limit: float = 0.80
-    minimum_avoidance_speed: float = 0.35
+    clear_path_speed: float = 0.75
+    avoidance_speed_limit: float = 0.65
+    corner_speed_limit: float = 0.55
+    minimum_avoidance_speed: float = 0.25
 
-    acceleration_rate: float = 0.90
+    acceleration_rate: float = 0.50
     deceleration_rate: float = 2.00
     
-    max_yaw_rate: float = 1.00
+    max_yaw_rate: float = 0.8
 
     stop_distance: float = 1.80
     safe_distance: float = 6.00
@@ -249,25 +249,60 @@ class WaypointVfhController(Node):
         self.config = ControllerConfig()
 
         self.waypoints = [
+            (3.0, 0.0),
+            (9.0, 0.0),
+            (15.0, 0.0),
+            (21.0, 0.0),
+            (26.0, 0.0),
+
+            (27.5, 0.4),
+            (28.7, 1.2),
+            (29.5, 2.2),
+            (30.0, 3.5),
+
+            (30.0, 6.0),
+            (30.0, 9.0),
+
+            (29.7, 10.2),
+            (29.0, 11.0),
+            (28.0, 11.7),
+            (26.5, 12.0),
+
+            (22.0, 12.0),
+            (18.0, 12.0),
+            (12.0, 12.0),
+            (6.0, 12.0),
+            (3.0, 12.0),
+
+            (1.8, 11.7),
+            (0.9, 11.0),
+            (0.3, 10.0),
+            (0.0, 8.5),
+
+            (0.0, 6.0),
+            (0.0, 3.0),
+
+            (0.3, 1.8),
+            (1.0, 0.9),
+            (2.0, 0.3),
             (3.5, 0.0),
-            (8.0, 0.0),
-            (12.0, 0.0),
-            (15.5, 0.0),
 
-            # Smoother left turn
-            (16.7, 0.3),
-            (17.5, 1.0),
-            (18.0, 2.0),
-            (18.0, 3.5),
-
-            # Vertical corridor
-            (18.0, 6.0),
-            (18.0, 9.0),
-        ]        
+            (9.0, 0.0),
+        ]               
+        
+        self.corner_waypoint_indexes = (
+            self.calculate_corner_waypoint_indexes()
+        )
+        self.get_logger().info(
+            f"Corner waypoint indexes: "
+            f"{sorted(self.corner_waypoint_indexes)}"
+        )
         
         self.current_waypoint_index = 0
-        self.finished = False
-
+        self.current_lap = 1
+        self.total_laps = 2
+        self.finished = False        
+        
         self.scan_message: LaserScan | None = None
         self.robot_x: float | None = None
         self.robot_y: float | None = None
@@ -285,7 +320,7 @@ class WaypointVfhController(Node):
         self.create_subscription(
             LaserScan, "/scan", self.scan_callback, qos_profile_sensor_data
         )
-        self.create_subscription(Odometry, "/odom", self.odom_callback, 10)
+        self.create_subscription(Odometry, "/odometry/filtered", self.odom_callback, 10)
         self.control_timer = self.create_timer(0.05, self.control_callback)
 
         self.get_logger().info(
@@ -294,6 +329,39 @@ class WaypointVfhController(Node):
             f"clear speed={self.config.clear_path_speed:.2f} m/s | "
             f"avoidance limit={self.config.avoidance_speed_limit:.2f} m/s"
         )
+
+    def calculate_corner_waypoint_indexes(self):
+        """Find waypoints where the route direction changes significantly."""
+        corner_indexes = set()
+
+        for index in range(1, len(self.waypoints) - 1):
+            previous_point = self.waypoints[index - 1]
+            current_point = self.waypoints[index]
+            next_point = self.waypoints[index + 1]
+
+            incoming_heading = math.atan2(
+                current_point[1] - previous_point[1],
+                current_point[0] - previous_point[0],
+            )
+
+            outgoing_heading = math.atan2(
+                next_point[1] - current_point[1],
+                next_point[0] - current_point[0],
+            )
+
+            heading_change = math.atan2(
+                math.sin(outgoing_heading - incoming_heading),
+                math.cos(outgoing_heading - incoming_heading),
+            )
+
+            # Treat direction changes greater than 18 degrees as corners
+            if abs(heading_change) >= math.radians(18.0):
+                corner_indexes.add(index)
+
+                # Also slow down one waypoint before the corner
+                corner_indexes.add(index - 1)
+
+        return corner_indexes
 
     def scan_callback(self, message: LaserScan) -> None:
         self.scan_message = message
@@ -319,7 +387,10 @@ class WaypointVfhController(Node):
         assert self.robot_y is not None
 
         while self.current_waypoint_index < len(self.waypoints):
-            waypoint_x, waypoint_y = self.waypoints[self.current_waypoint_index]
+            waypoint_x, waypoint_y = self.waypoints[
+                self.current_waypoint_index
+            ]
+
             distance = math.hypot(
                 waypoint_x - self.robot_x,
                 waypoint_y - self.robot_y,
@@ -327,7 +398,8 @@ class WaypointVfhController(Node):
 
             tolerance = (
                 self.config.final_waypoint_tolerance
-                if self.current_waypoint_index == len(self.waypoints) - 1
+                if self.current_waypoint_index
+                == len(self.waypoints) - 1
                 else self.config.waypoint_tolerance
             )
 
@@ -335,17 +407,36 @@ class WaypointVfhController(Node):
                 return True
 
             self.get_logger().info(
+                f"Lap {self.current_lap} | "
                 f"Waypoint {self.current_waypoint_index} reached | "
                 f"robot=({self.robot_x:.2f}, {self.robot_y:.2f})"
             )
+
             self.current_waypoint_index += 1
             self.previous_heading = 0.0
 
+        if self.current_lap < self.total_laps:
+            self.current_lap += 1
+
+            # Last waypoint is (9, 0), facing east.
+            # Continue toward (15, 0) without turning backwards.
+            self.current_waypoint_index = 2
+            self.previous_heading = 0.0
+
+            self.get_logger().info(
+                f"Starting lap {self.current_lap} "
+                f"of {self.total_laps}"
+            )
+            return True
+
         self.finished = True
         self.publish_stop()
-        self.get_logger().info("All waypoints reached. Robot stopped.")
-        return False
 
+        self.get_logger().info(
+            f"Completed {self.total_laps} laps. Robot stopped."
+        )
+        return False   
+     
     def waypoint_relative_heading(self) -> tuple[float, float]:
         assert self.robot_x is not None
         assert self.robot_y is not None
@@ -490,9 +581,7 @@ class WaypointVfhController(Node):
         if waypoint_distance < 1.2:
             target_speed = min(target_speed, 0.35)
 
-        if self.current_waypoint_index in {
-            4, 5, 6, 7
-        }:
+        if self.current_waypoint_index in self.corner_waypoint_indexes: 
             target_speed = min(
                 target_speed,
                 self.config.corner_speed_limit,
@@ -598,17 +687,22 @@ class WaypointVfhController(Node):
         command.angular.z = result.angular_z
         self.command_publisher.publish(command)
 
-        if now - self.last_log_time >= 0.50:
+        danger_condition = (
+            result.front_clearance < 4.0
+            or result.avoiding
+            or result.emergency_stop
+        )
+
+        if danger_condition and now - self.last_log_time >= 0.20:
             waypoint_x, waypoint_y = self.waypoints[
                 self.current_waypoint_index
             ]
 
-            self.get_logger().info(
-                "WP-VFH | "
+            self.get_logger().warning(
+                "VFH-DANGER | "
                 f"wp={self.current_waypoint_index}, "
                 f"robot=({self.robot_x:.2f}, {self.robot_y:.2f}), "
                 f"target=({waypoint_x:.2f}, {waypoint_y:.2f}), "
-                f"distance={waypoint_distance:.2f}, "
                 f"goal={math.degrees(desired_heading):.1f} deg, "
                 f"steer={math.degrees(result.steering_angle):.1f} deg, "
                 f"front={result.front_clearance:.2f} m, "
@@ -617,8 +711,9 @@ class WaypointVfhController(Node):
                 f"avoiding={result.avoiding}, "
                 f"emergency={result.emergency_stop}"
             )
-            self.last_log_time = now
 
+            self.last_log_time = now
+            
     def destroy_node(self) -> bool:
         self.publish_stop()
         return super().destroy_node()

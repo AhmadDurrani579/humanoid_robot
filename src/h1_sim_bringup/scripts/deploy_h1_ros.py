@@ -10,9 +10,7 @@ import mujoco.viewer
 import numpy as np
 import torch
 import yaml
-
 from legged_gym import LEGGED_GYM_ROOT_DIR
-
 
 UDP_HOST = "127.0.0.1"
 UDP_PORT = 15000
@@ -23,7 +21,7 @@ LIDAR_UDP_PORT = 15001
 
 
 # This policy needs a small forward command to remain stable.
-IDLE_FORWARD_SPEED = 0.1
+IDLE_FORWARD_SPEED = 0.0975
 
 # If ROS commands stop arriving, return to the idle gait.
 COMMAND_TIMEOUT_SECONDS = 1.0
@@ -54,16 +52,16 @@ LIDAR_UPDATE_INTERVAL = 0.10
 
 # Idle position-hold controller gains.
 IDLE_POSITION_KP_X = 0.35
-IDLE_POSITION_KP_Y = 0.80
-IDLE_YAW_KP = 0.50
+IDLE_POSITION_KP_Y = 0.10
+IDLE_YAW_KP = 2.50
 
 # Maximum idle corrections.
 MAX_IDLE_X_CORRECTION = 0.08
-MAX_IDLE_Y_CORRECTION = 0.15
-MAX_IDLE_YAW_CORRECTION = 0.12
+MAX_IDLE_Y_CORRECTION = 0.03
+MAX_IDLE_YAW_CORRECTION = 0.25
 
 # Small constant lateral correction.
-IDLE_Y_BIAS = 0.02
+IDLE_Y_BIAS = 0.0
 
 ODOM_UDP_IP = "127.0.0.1"
 ODOM_UDP_PORT = 15002
@@ -424,7 +422,7 @@ def main():
     
     # False means the RL walking policy is active.
 
-    stand_mode = False
+    stand_mode = True
     previous_stand_mode = None
 
     idle_reference_x = None
@@ -500,6 +498,51 @@ def main():
         f"Pelvis body found with ID: {pelvis_body_id}"
     )
     
+    gyro_sensor_id = mujoco.mj_name2id(
+        model,
+        mujoco.mjtObj.mjOBJ_SENSOR,
+        "pelvis_gyro",
+    )
+
+    accelerometer_sensor_id = mujoco.mj_name2id(
+        model,
+        mujoco.mjtObj.mjOBJ_SENSOR,
+        "pelvis_accelerometer",
+    )
+
+    orientation_sensor_id = mujoco.mj_name2id(
+        model,
+        mujoco.mjtObj.mjOBJ_SENSOR,
+        "pelvis_orientation",
+    )
+
+    if (
+        gyro_sensor_id == -1
+        or accelerometer_sensor_id == -1
+        or orientation_sensor_id == -1
+    ):
+        raise RuntimeError(
+            "One or more MuJoCo IMU sensors were not found."
+        )
+
+    gyro_address = int(
+        model.sensor_adr[gyro_sensor_id]
+    )
+
+    accelerometer_address = int(
+        model.sensor_adr[accelerometer_sensor_id]
+    )
+
+    orientation_address = int(
+        model.sensor_adr[orientation_sensor_id]
+    )
+
+    print(
+        "IMU sensors found | "
+        f"gyro={gyro_sensor_id}, "
+        f"accelerometer={accelerometer_sensor_id}, "
+        f"orientation={orientation_sensor_id}"
+    )
     
     model.opt.timestep = simulation_dt
 
@@ -721,6 +764,73 @@ def main():
                 # -------------------------------------
                 # 3. Apply command speed ramp
                 # -------------------------------------
+                
+                # -------------------------------------
+                
+                # Continuous idle position and yaw hold
+                # -------------------------------------
+                if stand_mode:
+                    robot_x = float(data.qpos[0])
+                    robot_y = float(data.qpos[1])
+
+                    robot_yaw = get_yaw_from_quaternion(
+                        data.qpos[3:7]
+                    )
+
+                    if idle_reference_x is None:
+                        idle_reference_x = robot_x
+                        idle_reference_y = robot_y
+                        idle_reference_yaw = robot_yaw
+
+                    world_error_x = (
+                        idle_reference_x - robot_x
+                    )
+
+                    world_error_y = (
+                        idle_reference_y - robot_y
+                    )
+
+                    cos_yaw = np.cos(robot_yaw)
+                    sin_yaw = np.sin(robot_yaw)
+
+                    body_error_x = (
+                        cos_yaw * world_error_x
+                        + sin_yaw * world_error_y
+                    )
+
+                    body_error_y = (
+                        -sin_yaw * world_error_x
+                        + cos_yaw * world_error_y
+                    )
+
+                    yaw_error = wrap_angle(
+                        idle_reference_yaw - robot_yaw
+                    )
+
+                    x_correction = np.clip(
+                        IDLE_POSITION_KP_X * body_error_x,
+                        -MAX_IDLE_X_CORRECTION,
+                        MAX_IDLE_X_CORRECTION,
+                    )
+
+                    y_correction = np.clip(
+                        IDLE_POSITION_KP_Y * body_error_y,
+                        -MAX_IDLE_Y_CORRECTION,
+                        MAX_IDLE_Y_CORRECTION,
+                    )
+
+                    yaw_correction = np.clip(
+                        IDLE_YAW_KP * yaw_error,
+                        -MAX_IDLE_YAW_CORRECTION,
+                        MAX_IDLE_YAW_CORRECTION,
+                    )
+
+                    target_cmd[:] = [
+                        IDLE_FORWARD_SPEED + x_correction,
+                        IDLE_Y_BIAS + y_correction,
+                        yaw_correction,
+                    ]
+                
                 linear_step = (
                     LINEAR_ACCELERATION
                     * model.opt.timestep
@@ -786,7 +896,25 @@ def main():
                     model,
                     data,
                 )
-                current_time = time.monotonic()
+                # Simulation-only idle position lock.
+                if (
+                    stand_mode
+                    and idle_reference_x is not None
+                    and idle_reference_y is not None
+                ):
+                    data.qpos[0] = idle_reference_x
+                    data.qpos[1] = idle_reference_y
+
+                    data.qvel[0] = 0.0
+                    data.qvel[1] = 0.0
+
+                    mujoco.mj_forward(
+                        model,
+                        data,
+                    )
+
+                current_time = time.monotonic()   
+                
                 # -------------------------------------
                 # Publish MuJoCo odometry through UDP
                 # -------------------------------------
@@ -832,23 +960,75 @@ def main():
                         + cos_yaw * world_velocity_y
                     )
 
+                    gyro = data.sensordata[
+                        gyro_address:gyro_address + 3
+                    ]
+
+                    accelerometer = data.sensordata[
+                        accelerometer_address:
+                        accelerometer_address + 3
+                    ]
+
+                    imu_orientation = data.sensordata[
+                        orientation_address:
+                        orientation_address + 4
+                    ]
+
+                    # MuJoCo framequat order is w, x, y, z.
+                    imu_quaternion_w = float(
+                        imu_orientation[0]
+                    )
+                    imu_quaternion_x = float(
+                        imu_orientation[1]
+                    )
+                    imu_quaternion_y = float(
+                        imu_orientation[2]
+                    )
+                    imu_quaternion_z = float(
+                        imu_orientation[3]
+                    )
+
                     odom_packet = struct.pack(
-                        "13f",
+                        "23f",
+
+                        # Odometry position: 3
                         position_x,
                         position_y,
                         position_z,
+
+                        # Odometry orientation: 4
                         quaternion_x,
                         quaternion_y,
                         quaternion_z,
                         quaternion_w,
+
+                        # Odometry linear velocity: 3
                         body_velocity_x,
                         body_velocity_y,
                         world_velocity_z,
+
+                        # Odometry angular velocity: 3
                         angular_velocity_x,
                         angular_velocity_y,
                         angular_velocity_z,
-                    )
 
+                        # IMU gyro: 3
+                        float(gyro[0]),
+                        float(gyro[1]),
+                        float(gyro[2]),
+
+                        # IMU accelerometer: 3
+                        float(accelerometer[0]),
+                        float(accelerometer[1]),
+                        float(accelerometer[2]),
+
+                        # IMU orientation: 4
+                        imu_quaternion_x,
+                        imu_quaternion_y,
+                        imu_quaternion_z,
+                        imu_quaternion_w,
+                    )
+                    
                     odom_socket.sendto(
                         odom_packet,
                         (

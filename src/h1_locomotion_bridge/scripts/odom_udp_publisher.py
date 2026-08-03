@@ -8,12 +8,13 @@ from geometry_msgs.msg import TransformStamped
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from tf2_ros import TransformBroadcaster
+from sensor_msgs.msg import Imu
 
 
 UDP_IP = "127.0.0.1"
 UDP_PORT = 15002
 
-PACKET_FLOAT_COUNT = 13
+PACKET_FLOAT_COUNT = 23
 PACKET_SIZE = struct.calcsize(
     f"{PACKET_FLOAT_COUNT}f"
 )
@@ -29,6 +30,14 @@ class OdomUdpPublisher(Node):
             self.create_publisher(
                 Odometry,
                 "/odom",
+                10,
+            )
+        )
+        
+        self.imu_publisher = (
+            self.create_publisher(
+                Imu,
+                "/imu/data",
                 10,
             )
         )
@@ -100,21 +109,37 @@ class OdomUdpPublisher(Node):
             position_x,
             position_y,
             position_z,
+
             quaternion_x,
             quaternion_y,
             quaternion_z,
             quaternion_w,
+
             linear_velocity_x,
             linear_velocity_y,
             linear_velocity_z,
+
             angular_velocity_x,
             angular_velocity_y,
             angular_velocity_z,
+
+            imu_gyro_x,
+            imu_gyro_y,
+            imu_gyro_z,
+
+            imu_acceleration_x,
+            imu_acceleration_y,
+            imu_acceleration_z,
+
+            imu_quaternion_x,
+            imu_quaternion_y,
+            imu_quaternion_z,
+            imu_quaternion_w,
         ) = struct.unpack(
-            "13f",
+            "23f",
             latest_packet,
         )
-
+        
         timestamp = self.get_clock().now().to_msg()
 
         odom = Odometry()
@@ -146,6 +171,15 @@ class OdomUdpPublisher(Node):
             quaternion_w
         )
 
+        odom.pose.covariance = [
+            0.02, 0.0,  0.0,  0.0,  0.0,  0.0,
+            0.0,  0.02, 0.0,  0.0,  0.0,  0.0,
+            0.0,  0.0,  0.10, 0.0,  0.0,  0.0,
+            0.0,  0.0,  0.0,  0.10, 0.0,  0.0,
+            0.0,  0.0,  0.0,  0.0,  0.10, 0.0,
+            0.0,  0.0,  0.0,  0.0,  0.0,  0.05,
+        ]
+        
         odom.twist.twist.linear.x = float(
             linear_velocity_x
         )
@@ -165,9 +199,75 @@ class OdomUdpPublisher(Node):
         odom.twist.twist.angular.z = float(
             angular_velocity_z
         )
-
+        
+        odom.twist.covariance = [
+            0.04, 0.0,  0.0,  0.0,  0.0,  0.0,
+            0.0,  0.04, 0.0,  0.0,  0.0,  0.0,
+            0.0,  0.0,  0.10, 0.0,  0.0,  0.0,
+            0.0,  0.0,  0.0,  0.10, 0.0,  0.0,
+            0.0,  0.0,  0.0,  0.0,  0.10, 0.0,
+            0.0,  0.0,  0.0,  0.0,  0.0,  0.03,
+        ]
+        
         self.odom_publisher.publish(odom)
 
+        imu = Imu()
+
+        imu.header.stamp = timestamp
+        imu.header.frame_id = "pelvis"
+
+        imu.orientation.x = float(
+            imu_quaternion_x
+        )
+        imu.orientation.y = float(
+            imu_quaternion_y
+        )
+        imu.orientation.z = float(
+            imu_quaternion_z
+        )
+        imu.orientation.w = float(
+            imu_quaternion_w
+        )
+
+        imu.angular_velocity.x = float(
+            imu_gyro_x
+        )
+        imu.angular_velocity.y = float(
+            imu_gyro_y
+        )
+        imu.angular_velocity.z = float(
+            imu_gyro_z
+        )
+
+        imu.linear_acceleration.x = float(
+            imu_acceleration_x
+        )
+        imu.linear_acceleration.y = float(
+            imu_acceleration_y
+        )
+        imu.linear_acceleration.z = float(
+            imu_acceleration_z
+        )
+
+        imu.orientation_covariance = [
+            0.01, 0.0, 0.0,
+            0.0, 0.01, 0.0,
+            0.0, 0.0, 0.02,
+        ]
+
+        imu.angular_velocity_covariance = [
+            0.01, 0.0, 0.0,
+            0.0, 0.01, 0.0,
+            0.0, 0.0, 0.01,
+        ]
+
+        imu.linear_acceleration_covariance = [
+            0.10, 0.0, 0.0,
+            0.0, 0.10, 0.0,
+            0.0, 0.0, 0.10,
+        ]
+
+        self.imu_publisher.publish(imu)
         transform = TransformStamped()
 
         transform.header.stamp = timestamp
@@ -200,6 +300,7 @@ class OdomUdpPublisher(Node):
         self.tf_broadcaster.sendTransform(
             transform
         )
+        
 
     def destroy_node(self) -> bool:
         self.socket.close()

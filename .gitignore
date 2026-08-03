@@ -1,0 +1,15 @@
+# ROS 2 generated directories
+build/
+install/
+log/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# VS Code
+.vscode/
+
+# Generated TF graphs
+frames_*.gv
+frames_*.pdf
