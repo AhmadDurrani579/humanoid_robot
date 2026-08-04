@@ -4,10 +4,8 @@ import socket
 import struct
 
 import rclpy
-from geometry_msgs.msg import TransformStamped
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
-from tf2_ros import TransformBroadcaster
 from sensor_msgs.msg import Imu
 
 
@@ -40,10 +38,6 @@ class OdomUdpPublisher(Node):
                 "/imu/data",
                 10,
             )
-        )
-
-        self.tf_broadcaster = (
-            TransformBroadcaster(self)
         )
 
         self.socket = socket.socket(
@@ -268,40 +262,7 @@ class OdomUdpPublisher(Node):
         ]
 
         self.imu_publisher.publish(imu)
-        transform = TransformStamped()
-
-        transform.header.stamp = timestamp
-        transform.header.frame_id = "world"
-        transform.child_frame_id = "pelvis"
-
-        transform.transform.translation.x = float(
-            position_x
-        )
-        transform.transform.translation.y = float(
-            position_y
-        )
-        transform.transform.translation.z = float(
-            position_z
-        )
-
-        transform.transform.rotation.x = float(
-            quaternion_x
-        )
-        transform.transform.rotation.y = float(
-            quaternion_y
-        )
-        transform.transform.rotation.z = float(
-            quaternion_z
-        )
-        transform.transform.rotation.w = float(
-            quaternion_w
-        )
-
-        self.tf_broadcaster.sendTransform(
-            transform
-        )
         
-
     def destroy_node(self) -> bool:
         self.socket.close()
         return super().destroy_node()

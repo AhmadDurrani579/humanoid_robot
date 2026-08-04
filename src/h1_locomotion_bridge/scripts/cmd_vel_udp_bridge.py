@@ -37,6 +37,11 @@ class CmdVelUdpBridge(Node):
         linear_y = float(message.linear.y)
         angular_z = float(message.angular.z)
 
+        minimum_forward_speed = 0.30
+
+        if 0.0 < linear_x < minimum_forward_speed:
+            linear_x = minimum_forward_speed
+            
         packet = struct.pack(
             "fff",
             linear_x,
@@ -47,13 +52,6 @@ class CmdVelUdpBridge(Node):
         self.udp_socket.sendto(
             packet,
             (self.udp_host, self.udp_port),
-        )
-
-        self.get_logger().info(
-            f"Sent command: "
-            f"x={linear_x:.2f}, "
-            f"y={linear_y:.2f}, "
-            f"yaw={angular_z:.2f}"
         )
 
     def destroy_node(self):
