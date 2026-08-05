@@ -388,16 +388,14 @@ class Nav2VfhPathController(Node):
                 else math.radians(-70.0)
             )
             emergency_stop = True
+            
+        obstacle_activation_distance = 1.50
 
-        avoiding = (
-            front_clearance < self.config.safe_distance
-            or abs(
-                normalise_angle(
-                    steering_angle - desired_heading
-                )
-            ) > math.radians(10.0)
+        # Only use VFH obstacle steering when an obstacle is genuinely close.
+        obstacle_avoidance_active = (
+            front_clearance < obstacle_activation_distance
         )
-
+        
         heading_error = abs(desired_heading)
 
         steering_ratio = float(
@@ -422,12 +420,13 @@ class Nav2VfhPathController(Node):
                 - self.config.stop_distance
             )
 
-        # Use stable H1 walking speeds.
+        # Keep a small forward command during large turns.
+        # The H1 turns more reliably while walking slowly.
         if heading_error > math.radians(55.0):
-            target_speed = 0.0
+            target_speed = self.minimum_forward_speed
 
         elif heading_error > math.radians(35.0):
-            target_speed = 0.30
+            target_speed = self.minimum_forward_speed
 
         elif heading_error > math.radians(18.0):
             target_speed = 0.40
@@ -436,32 +435,39 @@ class Nav2VfhPathController(Node):
             target_speed = self.maximum_forward_speed
 
         target_speed *= clearance_factor
-        target_speed *= 1.0 - (0.55 * steering_ratio)
 
-        if avoiding and target_speed > 0.0:
+        # Apply steering slowdown only during real obstacle avoidance.
+        if obstacle_avoidance_active:
+            target_speed *= 1.0 - (0.55 * steering_ratio)
+
+            if target_speed > 0.0:
+                target_speed = min(
+                    target_speed,
+                    self.config.avoidance_speed_limit,
+                )
+
+        # Slow down near the current path goal.
+        if goal_distance < 1.50:
             target_speed = min(
                 target_speed,
-                self.config.avoidance_speed_limit,
+                0.45,
             )
 
-        # Slow down near the final goal.
-        if goal_distance < 1.50:
-            target_speed = min(target_speed, 0.45)
-
         if goal_distance < 0.70:
-            target_speed = min(target_speed, 0.30)
+            target_speed = min(
+                target_speed,
+                self.minimum_forward_speed,
+            )
 
-        # Do not send unstable tiny forward commands to the RL policy.
         if 0.0 < target_speed < self.minimum_forward_speed:
             target_speed = self.minimum_forward_speed
 
         if emergency_stop:
             target_speed = 0.0
 
-        # Use continuous path-heading correction when the route is clear.
-        # VFH sector centres are spaced by 5 degrees, which otherwise causes
-        # angular.z to oscillate between approximately +/-0.0436 rad/s.
-        if not avoiding and front_clearance >= self.config.safe_distance:
+        # When the route is clear, follow the actual path heading directly.
+        # This preserves both positive and negative turning directions.
+        if not obstacle_avoidance_active:
             heading_gain = 1.5
 
             angular_z = float(
@@ -472,11 +478,11 @@ class Nav2VfhPathController(Node):
                 )
             )
 
-            # Ignore extremely small heading noise.
             if abs(angular_z) < 0.01:
                 angular_z = 0.0
 
         else:
+            # Use VFH steering only when avoiding a nearby obstacle.
             angular_z = float(
                 np.clip(
                     steering_angle,
@@ -484,16 +490,15 @@ class Nav2VfhPathController(Node):
                     self.maximum_yaw_rate,
                 )
             )
-            
+
         return PlannerResult(
             target_speed=float(max(0.0, target_speed)),
             angular_z=angular_z,
             steering_angle=float(steering_angle),
             front_clearance=float(front_clearance),
             emergency_stop=bool(emergency_stop),
-            avoiding=bool(avoiding),
+            avoiding=bool(obstacle_avoidance_active),
         )
-
     def inputs_are_fresh(self, now: float) -> bool:
         if (
             self.path is None

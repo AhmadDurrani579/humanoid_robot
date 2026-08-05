@@ -20,7 +20,8 @@ install(
     scripts/vfh_obstacle_avoidance.py
     scripts/straight_waypoint_follower.py
     scripts/waypoint_vfh_controller.py
-  
+    scripts/nav2_vfh_path_controller.py
+    scripts/race_mission_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
