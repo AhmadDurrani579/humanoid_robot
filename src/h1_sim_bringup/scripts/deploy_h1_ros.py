@@ -49,6 +49,19 @@ LIDAR_MAX_RANGE = 30.0
 
 LIDAR_UPDATE_INTERVAL = 0.10
 
+# RGB-D camera UDP output.
+CAMERA_UDP_IP = "127.0.0.1"
+CAMERA_UDP_PORT = 15003
+CAMERA_WIDTH = 640
+CAMERA_HEIGHT = 480
+CAMERA_FPS = 15.0
+CAMERA_UPDATE_INTERVAL = 1.0 / CAMERA_FPS
+CAMERA_CHUNK_SIZE = 60000
+CAMERA_PACKET_MAGIC = b"H1CM"
+CAMERA_FRAME_TYPE_COLOR = 1
+CAMERA_FRAME_TYPE_DEPTH = 2
+CAMERA_PACKET_HEADER_FORMAT = "<4sBIII"
+
 
 # Idle position-hold controller gains.
 IDLE_POSITION_KP_X = 0.35
@@ -199,6 +212,41 @@ def receive_latest_command(udp_socket):
     return latest_command
 
 
+def send_camera_frame(
+    udp_socket,
+    frame_type,
+    frame_id,
+    frame_bytes,
+):
+    """Split one RGB or depth frame into safe UDP datagrams."""
+
+    total_size = len(frame_bytes)
+    chunk_count = (
+        total_size + CAMERA_CHUNK_SIZE - 1
+    ) // CAMERA_CHUNK_SIZE
+
+    for chunk_index in range(chunk_count):
+        start = chunk_index * CAMERA_CHUNK_SIZE
+        end = min(
+            start + CAMERA_CHUNK_SIZE,
+            total_size,
+        )
+
+        header = struct.pack(
+            CAMERA_PACKET_HEADER_FORMAT,
+            CAMERA_PACKET_MAGIC,
+            frame_type,
+            frame_id,
+            chunk_index,
+            chunk_count,
+        )
+
+        udp_socket.sendto(
+            header + frame_bytes[start:end],
+            (CAMERA_UDP_IP, CAMERA_UDP_PORT),
+        )
+
+
 def get_yaw_from_quaternion(quaternion):
     qw = float(quaternion[0])
     qx = float(quaternion[1])
@@ -234,6 +282,7 @@ def move_towards(
         + np.sign(difference) * maximum_change
     )
 
+
 def generate_lidar_scan(
     model,
     data,
@@ -246,9 +295,22 @@ def generate_lidar_scan(
         lidar_site_id
     ].copy()
 
-    lidar_rotation = data.site_xmat[
-        lidar_site_id
-    ].reshape(3, 3)
+    # Keep the 2D scan horizontal by applying yaw only.
+    robot_yaw = get_yaw_from_quaternion(
+        data.qpos[3:7]
+    )
+
+    cos_yaw = np.cos(robot_yaw)
+    sin_yaw = np.sin(robot_yaw)
+
+    lidar_rotation = np.array(
+        [
+            [cos_yaw, -sin_yaw, 0.0],
+            [sin_yaw,  cos_yaw, 0.0],
+            [0.0,      0.0,     1.0],
+        ],
+        dtype=np.float64,
+    )
 
     angles = np.linspace(
         LIDAR_MIN_ANGLE,
@@ -263,6 +325,11 @@ def generate_lidar_scan(
         dtype=np.float32,
     )
 
+    geom_group = np.array(
+        [1, 0, 0, 0, 0, 0],
+        dtype=np.uint8,
+    )
+
     for index, angle in enumerate(angles):
         local_direction = np.array(
             [
@@ -274,16 +341,13 @@ def generate_lidar_scan(
         )
 
         world_direction = (
-            lidar_rotation @ local_direction
+            lidar_rotation
+            @ local_direction
         )
 
         hit_geom_id = np.array(
             [-1],
             dtype=np.int32,
-        )
-        geom_group = np.array(
-            [1, 0, 0, 0, 0, 0],
-            dtype=np.uint8,
         )
 
         distance = mujoco.mj_ray(
@@ -293,35 +357,17 @@ def generate_lidar_scan(
             world_direction,
             geom_group,
             1,
-            -1,
+            excluded_body_id,
             hit_geom_id,
         )
-        
-        # Temporary debug: identify very close hits
-        if (
-            distance >= 0.0
-            and distance < 0.20
-            and hit_geom_id[0] != -1
-        ):
-            hit_geom_name = mujoco.mj_id2name(
-                model,
-                mujoco.mjtObj.mjOBJ_GEOM,
-                int(hit_geom_id[0]),
-            )
-
-            print(
-                "Very close LiDAR hit | "
-                f"ray={index}, "
-                f"distance={distance:.3f} m, "
-                f"geom={hit_geom_name}"
-            )
 
         if (
-            distance >= LIDAR_MIN_RANGE
-            and distance <= LIDAR_MAX_RANGE
+            LIDAR_MIN_RANGE
+            <= distance
+            <= LIDAR_MAX_RANGE
         ):
             ranges[index] = float(distance)
-            
+
     return ranges
 
 
@@ -469,6 +515,38 @@ def main():
     
     data = mujoco.MjData(model)
 
+    camera_color_id = mujoco.mj_name2id(
+        model,
+        mujoco.mjtObj.mjOBJ_CAMERA,
+        "camera_color",
+    )
+
+    camera_depth_id = mujoco.mj_name2id(
+        model,
+        mujoco.mjtObj.mjOBJ_CAMERA,
+        "camera_depth",
+    )
+
+    if camera_color_id == -1 or camera_depth_id == -1:
+        raise RuntimeError(
+            "MuJoCo cameras 'camera_color' and "
+            "'camera_depth' were not found."
+        )
+
+    camera_renderer = mujoco.Renderer(
+        model,
+        height=CAMERA_HEIGHT,
+        width=CAMERA_WIDTH,
+    )
+
+    print(
+        "RGB-D cameras ready | "
+        f"color_id={camera_color_id} | "
+        f"depth_id={camera_depth_id} | "
+        f"resolution={CAMERA_WIDTH}x{CAMERA_HEIGHT} | "
+        f"rate={CAMERA_FPS:.1f} Hz"
+    )
+    
     lidar_sit_id = mujoco.mj_name2id(
         model,
         mujoco.mjtObj.mjOBJ_SITE,
@@ -565,6 +643,18 @@ def main():
         socket.SOCK_DGRAM,
     )
 
+    # RGB-D camera UDP sender socket.
+    camera_socket = socket.socket(
+        socket.AF_INET,
+        socket.SOCK_DGRAM,
+    )
+
+    camera_socket.setsockopt(
+        socket.SOL_SOCKET,
+        socket.SO_SNDBUF,
+        4 * 1024 * 1024,
+    )
+
     # Odometry UDP sender socket
     odom_socket = socket.socket(
         socket.AF_INET,
@@ -582,7 +672,9 @@ def main():
 
     counter = 0
     last_lidar_update_time = time.monotonic()
+    last_camera_update_time = time.monotonic()
     last_odom_update_time = time.monotonic()
+    camera_frame_id = 0
     last_command_time = time.monotonic()
     
     command_timeout_active = False
@@ -913,6 +1005,7 @@ def main():
                         data,
                     )
 
+                # -------------------------------------
                 current_time = time.monotonic()   
                 
                 # -------------------------------------
@@ -1041,6 +1134,51 @@ def main():
 
                 if (
                     current_time
+                    - last_camera_update_time
+                    >= CAMERA_UPDATE_INTERVAL
+                ):
+                    camera_renderer.update_scene(
+                        data,
+                        camera="camera_color",
+                    )
+
+                    color_image = np.ascontiguousarray(
+                        camera_renderer.render(),
+                        dtype=np.uint8,
+                    )
+
+                    camera_renderer.update_scene(
+                        data,
+                        camera="camera_depth",
+                    )
+                    camera_renderer.enable_depth_rendering()
+
+                    depth_image = np.ascontiguousarray(
+                        camera_renderer.render(),
+                        dtype=np.float32,
+                    )
+
+                    camera_renderer.disable_depth_rendering()
+
+                    send_camera_frame(
+                        camera_socket,
+                        CAMERA_FRAME_TYPE_COLOR,
+                        camera_frame_id,
+                        color_image.tobytes(order="C"),
+                    )
+
+                    send_camera_frame(
+                        camera_socket,
+                        CAMERA_FRAME_TYPE_DEPTH,
+                        camera_frame_id,
+                        depth_image.tobytes(order="C"),
+                    )
+
+                    camera_frame_id += 1
+                    last_camera_update_time = current_time
+
+                if (
+                    current_time
                     - last_lidar_update_time
                     >= LIDAR_UPDATE_INTERVAL
                 ):
@@ -1084,7 +1222,7 @@ def main():
                     )
                     
                     front_distance = float(
-                        np.min(lidar_ranges[175:186])
+                        np.min(lidar_ranges[165:196])
                     )
 
                     left_distance = float(
@@ -1346,10 +1484,11 @@ def main():
     finally:
         udp_socket.close()
         lidar_socket.close()
+        camera_socket.close()
         odom_socket.close()
-        print("UDP socket closed.")
+        camera_renderer.close()
+        print("UDP sockets and camera renderer closed.")
 
 
 if __name__ == "__main__":
     main()
-

@@ -13,3 +13,14 @@ __pycache__/
 # Generated TF graphs
 frames_*.gv
 frames_*.pdf
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Local backup files
+*_backup.py
+*_working.py
+*_stable.py
+*_working.launch.py
+*_stable.yaml
