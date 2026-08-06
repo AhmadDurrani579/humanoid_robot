@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import math
 import time
+from functools import partial
 from dataclasses import dataclass
 
 import rclpy
+from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import PoseStamped
-from nav2_msgs.action import ComputePathToPose
-from nav_msgs.msg import Path
+from nav2_msgs.action import NavigateToPose
+
 from rclpy.action import ActionClient
 from rclpy.duration import Duration
 from rclpy.node import Node
@@ -43,10 +45,9 @@ class RaceMissionNode(Node):
         # Frames and Nav2 planner.
         self.global_frame = "map"
         self.robot_frame = "pelvis"
-        self.planner_id = "GridBased"
 
         # Mission settings.
-        self.goal_timeout = 120.0
+        self.goal_timeout = 240.0
         self.between_goal_delay = 0.10
         self.maximum_planning_retries = 3
 
@@ -55,7 +56,10 @@ class RaceMissionNode(Node):
         self.distance_increase_threshold = 0.20
         self.distance_increase_required_count = 5
         self.minimum_goal_follow_time = 1.0
-        
+        # A waypoint can only be considered passed after the robot
+        # has first come reasonably close to it.
+        self.maximum_pass_through_distance = 1.50
+
         
         # Tracking for the current waypoint.
         self.closest_goal_distance = float("inf")
@@ -97,14 +101,28 @@ class RaceMissionNode(Node):
                 y=10.0,
                 yaw_degrees=90.0,
                 name="Right straight",
-                tolerance=0.35,
+                tolerance=0.40,
             ),
             RouteGoal(
-                x=27.0,
+                x=29.8,
+                y=11.2,
+                yaw_degrees=110.0,
+                name="Second corner entry",
+                tolerance=0.65,
+            ),
+            RouteGoal(
+                x=29.1,
+                y=12.1,
+                yaw_degrees=145.0,
+                name="Second corner middle",
+                tolerance=0.75,
+            ),
+            RouteGoal(
+                x=27.5,
                 y=13.0,
                 yaw_degrees=180.0,
-                name="Top-right corner",
-                tolerance=0.55,
+                name="Second corner exit",
+                tolerance=0.60,
             ),
             RouteGoal(
                 x=3.0,
@@ -112,7 +130,7 @@ class RaceMissionNode(Node):
                 yaw_degrees=180.0,
                 name="Top straight",
                 tolerance=0.35,
-            ),
+            ),            
             RouteGoal(
                 x=0.0,
                 y=10.0,
@@ -136,17 +154,16 @@ class RaceMissionNode(Node):
             ),
         ]
 
-        self.action_client = ActionClient(
+        self.navigation_client = ActionClient(
             self,
-            ComputePathToPose,
-            "/compute_path_to_pose",
+            NavigateToPose,
+            "/navigate_to_pose",
         )
 
-        self.path_clear_publisher = self.create_publisher(
-            Path,
-            "/plan",
-            10,
-        )
+        self.navigation_goal_handle = None
+        self.navigation_result_future = None
+        self.navigation_request_in_progress = False        
+        
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(
@@ -158,7 +175,6 @@ class RaceMissionNode(Node):
         self.current_goal_start_time: float | None = None
         self.mission_start_time: float | None = None
 
-        self.planning_in_progress = False
         self.following_current_goal = False
         self.mission_finished = False
         self.mission_failed = False
@@ -174,20 +190,12 @@ class RaceMissionNode(Node):
         )
 
         self.get_logger().info(
-            "Race mission node started | "
+            "MPPI race mission node started | "
             f"goals={len(self.route)} | "
             f"timeout={self.goal_timeout:.0f} s | "
-            f"pass-through distance="
+            f"navigation=NavigateToPose"
         )
 
-    def clear_path(self) -> None:
-        """Publish an empty path to stop the path controller."""
-
-        empty_path = Path()
-        empty_path.header.frame_id = self.global_frame
-        empty_path.header.stamp = self.get_clock().now().to_msg()
-
-        self.path_clear_publisher.publish(empty_path)
 
     def get_robot_position(self) -> tuple[float, float] | None:
         """Read the robot position from map -> pelvis TF."""
@@ -215,6 +223,30 @@ class RaceMissionNode(Node):
             float(translation.x),
             float(translation.y),
         )
+    
+    def cancel_current_navigation(self) -> None:
+        """
+        Cancel the current Nav2 NavigateToPose goal.
+        """
+
+        if self.navigation_goal_handle is None:
+            return
+
+        self.get_logger().info(
+            "Cancelling current NavigateToPose goal."
+        )
+
+        try:
+            self.navigation_goal_handle.cancel_goal_async()
+
+        except Exception as error:
+            self.get_logger().warning(
+                f"Failed to cancel navigation goal: {error}"
+            )
+
+        self.navigation_goal_handle = None
+        self.navigation_result_future = None
+        self.navigation_request_in_progress = False    
 
     @staticmethod
     def quaternion_from_yaw(
@@ -229,13 +261,13 @@ class RaceMissionNode(Node):
 
         return quaternion_z, quaternion_w
 
-    def create_planner_goal(
+    def create_navigation_goal(
         self,
         route_goal: RouteGoal,
-    ) -> ComputePathToPose.Goal:
-        """Create a Nav2 ComputePathToPose action goal."""
+    ) -> NavigateToPose.Goal:
+        """Create a Nav2 NavigateToPose action goal."""
 
-        action_goal = ComputePathToPose.Goal()
+        action_goal = NavigateToPose.Goal()
 
         pose = PoseStamped()
         pose.header.frame_id = self.global_frame
@@ -254,34 +286,31 @@ class RaceMissionNode(Node):
         pose.pose.orientation.z = quaternion_z
         pose.pose.orientation.w = quaternion_w
 
-        action_goal.goal = pose
-        action_goal.planner_id = self.planner_id
-        action_goal.use_start = False
+        action_goal.pose = pose
 
         return action_goal
-
+    
     def send_current_goal(self) -> None:
-        """Send the current route goal to Nav2."""
+        """Send the current route goal through NavigateToPose."""
 
         if self.current_goal_index >= len(self.route):
             self.finish_mission()
             return
 
-        if self.planning_in_progress:
+        if self.navigation_request_in_progress:
             return
 
         route_goal = self.route[self.current_goal_index]
 
-        # Reset pass-through tracking for the new goal.
         self.closest_goal_distance = float("inf")
         self.distance_increase_count = 0
         self.initial_goal_distance = float("inf")
 
-        self.planning_in_progress = True
+        self.navigation_request_in_progress = True
         self.following_current_goal = False
 
         self.get_logger().info(
-            f"Sending goal "
+            f"Sending navigation goal "
             f"{self.current_goal_index + 1}/{len(self.route)} | "
             f"{route_goal.name} | "
             f"position=({route_goal.x:.2f}, "
@@ -290,90 +319,160 @@ class RaceMissionNode(Node):
             f"tolerance={route_goal.tolerance:.2f} m"
         )
 
-        action_goal = self.create_planner_goal(route_goal)
+        navigation_goal = self.create_navigation_goal(
+            route_goal
+        )
 
-        future = self.action_client.send_goal_async(action_goal)
-        future.add_done_callback(self.goal_response_callback)
+        goal_index = self.current_goal_index
 
-    def goal_response_callback(self, future) -> None:
-        """Handle Nav2 goal acceptance."""
+        future = self.navigation_client.send_goal_async(
+            navigation_goal
+        )
+
+        future.add_done_callback(
+            partial(
+                self.navigation_goal_response_callback,
+                goal_index=goal_index,
+            )
+        )
+
+
+    def navigation_goal_response_callback(
+        self,
+        future,
+        goal_index: int,
+    ) -> None:
+        """Handle NavigateToPose goal acceptance."""
+
+        self.navigation_request_in_progress = False
+
+        if goal_index != self.current_goal_index:
+            self.get_logger().warning(
+                f"Ignoring stale navigation response for goal "
+                f"{goal_index + 1}."
+            )
+            return
 
         try:
             goal_handle = future.result()
 
         except Exception as error:
-            self.planning_in_progress = False
-            self.handle_planning_failure(
-                f"Failed to send planner goal: {error}"
+            self.handle_navigation_failure(
+                f"Failed to send NavigateToPose goal: {error}"
             )
             return
 
         if not goal_handle.accepted:
-            self.planning_in_progress = False
-            self.handle_planning_failure(
-                "Planner rejected the goal."
+            self.handle_navigation_failure(
+                "NavigateToPose rejected the goal."
             )
             return
 
-        result_future = goal_handle.get_result_async()
-        result_future.add_done_callback(
-            self.planning_result_callback
-        )
-
-    def planning_result_callback(self, future) -> None:
-        """Handle the planned path result."""
-
-        self.planning_in_progress = False
-
-        try:
-            wrapped_result = future.result()
-            result = wrapped_result.result
-
-        except Exception as error:
-            self.handle_planning_failure(
-                f"Planner result failed: {error}"
-            )
-            return
-
-        if result.error_code != ComputePathToPose.Result.NONE:
-            error_message = result.error_msg
-
-            if not error_message:
-                error_message = "No additional error message."
-
-            self.handle_planning_failure(
-                f"Planner error code={result.error_code} | "
-                f"{error_message}"
-            )
-            return
-
-        if not result.path.poses:
-            self.handle_planning_failure(
-                "Planner returned an empty path."
-            )
-            return
-
-        self.planning_retry_count = 0
+        self.navigation_goal_handle = goal_handle
         self.following_current_goal = True
+        self.planning_retry_count = 0
         self.current_goal_start_time = time.monotonic()
 
         if self.mission_start_time is None:
-            self.mission_start_time = self.current_goal_start_time
+            self.mission_start_time = (
+                self.current_goal_start_time
+            )
 
-        self.get_logger().info(
-            f"Path ready for goal "
-            f"{self.current_goal_index + 1} | "
-            f"poses={len(result.path.poses)}"
+        result_future = goal_handle.get_result_async()
+
+        self.navigation_result_future = result_future
+
+        result_future.add_done_callback(
+            partial(
+                self.navigation_result_callback,
+                goal_index=goal_index,
+            )
         )
 
-    def handle_planning_failure(
+        self.get_logger().info(
+            f"NavigateToPose accepted goal "
+            f"{goal_index + 1}/{len(self.route)}"
+        )
+    
+
+    def navigation_result_callback(
+        self,
+        future,
+        goal_index: int,
+    ) -> None:
+        """Handle NavigateToPose completion, cancellation, or failure."""
+
+        try:
+            wrapped_result = future.result()
+            status = wrapped_result.status
+            result = wrapped_result.result
+
+        except Exception as error:
+            if not self.mission_finished and not self.mission_failed:
+                self.get_logger().warning(
+                    f"NavigateToPose result callback error: {error}"
+                )
+            return
+
+        # Ignore results belonging to an older waypoint.
+        if goal_index != self.current_goal_index:
+            return
+
+        if status == GoalStatus.STATUS_CANCELED:
+            self.get_logger().info(
+                f"NavigateToPose cancelled for goal "
+                f"{goal_index + 1}."
+            )
+            return
+
+        if status == GoalStatus.STATUS_SUCCEEDED:
+            robot_position = self.get_robot_position()
+
+            if robot_position is None:
+                self.fail_mission(
+                    "NavigateToPose reported success, but robot "
+                    "TF was unavailable."
+                )
+                return
+
+            robot_x, robot_y = robot_position
+
+            distance = self.calculate_goal_distance(
+                robot_x,
+                robot_y,
+            )
+
+            self.complete_current_goal(
+                robot_x=robot_x,
+                robot_y=robot_y,
+                completion_distance=distance,
+                completion_reason="NavigateToPose succeeded",
+                cancel_navigation=False,
+            )
+            return
+
+        error_code = getattr(result, "error_code", -1)
+        error_msg = getattr(result, "error_msg", "")
+
+        self.handle_navigation_failure(
+            f"NavigateToPose failed | "
+            f"goal={goal_index + 1} | "
+            f"status={status} | "
+            f"error_code={error_code} | "
+            f"{error_msg}"
+        )
+
+
+    def handle_navigation_failure(
         self,
         reason: str,
     ) -> None:
-        """Retry planning or fail the mission."""
+        """Retry the current navigation goal or fail the mission."""
 
         self.following_current_goal = False
-        self.clear_path()
+        self.navigation_request_in_progress = False
+        self.navigation_goal_handle = None
+        self.navigation_result_future = None
 
         self.planning_retry_count += 1
 
@@ -382,7 +481,7 @@ class RaceMissionNode(Node):
             > self.maximum_planning_retries
         ):
             self.fail_mission(
-                f"Planning failed after "
+                f"Navigation failed after "
                 f"{self.maximum_planning_retries} retries | "
                 f"{reason}"
             )
@@ -396,7 +495,7 @@ class RaceMissionNode(Node):
         )
 
         self.next_goal_send_time = time.monotonic() + 2.0
-
+    
     def calculate_goal_distance(
         self,
         robot_x: float,
@@ -457,11 +556,17 @@ class RaceMissionNode(Node):
             >= self.minimum_waypoint_progress
         )
 
+        close_enough_to_waypoint = (
+            self.closest_goal_distance
+            <= self.maximum_pass_through_distance
+        )
+
         return (
             sufficient_progress
+            and close_enough_to_waypoint
             and self.distance_increase_count
             >= self.distance_increase_required_count
-        )
+        )        
         
     def complete_current_goal(
         self,
@@ -469,7 +574,8 @@ class RaceMissionNode(Node):
         robot_y: float,
         completion_distance: float,
         completion_reason: str,
-    ) -> None:
+        cancel_navigation: bool = True,
+    ) -> None:        
         """Complete the current goal and schedule the next one."""
 
         now = time.monotonic()
@@ -494,8 +600,13 @@ class RaceMissionNode(Node):
             f"time={goal_duration:.2f} s"
         )
 
-        # Do not clear /plan here.
-        # The next Nav2 path replaces the current path.
+        if cancel_navigation:
+            self.cancel_current_navigation()
+        else:
+            self.navigation_goal_handle = None
+            self.navigation_result_future = None
+            self.navigation_request_in_progress = False
+            
         self.following_current_goal = False
         self.current_goal_start_time = None
         self.current_goal_index += 1
@@ -516,7 +627,7 @@ class RaceMissionNode(Node):
 
         self.mission_finished = True
         self.following_current_goal = False
-        self.clear_path()
+        self.cancel_current_navigation()
 
         total_time = 0.0
 
@@ -553,8 +664,7 @@ class RaceMissionNode(Node):
 
         self.mission_failed = True
         self.following_current_goal = False
-        self.planning_in_progress = False
-        self.clear_path()
+        self.cancel_current_navigation()
 
         self.get_logger().error(
             "========================================"
@@ -579,18 +689,17 @@ class RaceMissionNode(Node):
 
         now = time.monotonic()
 
-        if not self.action_client.server_is_ready():
+        if not self.navigation_client.server_is_ready():
             if now - self.last_server_warning_time >= 2.0:
                 self.get_logger().warning(
-                    "Waiting for "
-                    "/compute_path_to_pose action server."
+                    "Waiting for /navigate_to_pose action server."
                 )
                 self.last_server_warning_time = now
 
             return
 
         if (
-            not self.planning_in_progress
+            not self.navigation_request_in_progress
             and not self.following_current_goal
         ):
             if now >= self.next_goal_send_time:
@@ -703,9 +812,7 @@ class RaceMissionNode(Node):
             self.last_status_log_time = now
 
     def destroy_node(self) -> bool:
-        if rclpy.ok():
-            self.clear_path()
-
+        self.cancel_current_navigation()
         return super().destroy_node()
 
 
@@ -721,9 +828,6 @@ def main(args=None) -> None:
         pass
 
     finally:
-        if rclpy.ok():
-            node.clear_path()
-
         node.destroy_node()
 
         if rclpy.ok():

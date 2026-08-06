@@ -252,17 +252,16 @@ local_costmap:
         scan:
           topic: /scan
           data_type: "LaserScan"
-
           clearing: true
           marking: true
-
           max_obstacle_height: 2.0
 
-          obstacle_max_range: 8.0
-          obstacle_min_range: 0.0
+          obstacle_max_range: 25.0
+          obstacle_min_range: 0.20
 
-          raytrace_max_range: 10.0
+          raytrace_max_range: 30.0
           raytrace_min_range: 0.0
+          inf_is_valid: true
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
@@ -275,7 +274,7 @@ local_costmap:
 global_costmap:
   global_costmap:
     ros__parameters:
-      update_frequency: 1.0
+      update_frequency: 2.0
       publish_frequency: 1.0
       global_frame: map
       robot_base_frame: pelvis
@@ -293,9 +292,9 @@ global_costmap:
           clearing: True
           marking: True
           data_type: "LaserScan"
-          raytrace_max_range: 10.0
+          raytrace_max_range: 30.0
           raytrace_min_range: 0.0
-          obstacle_max_range: 8.0
+          obstacle_max_range: 25.0
           obstacle_min_range: 0.0
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"

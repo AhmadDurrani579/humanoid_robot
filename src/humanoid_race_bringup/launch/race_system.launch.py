@@ -34,7 +34,7 @@ def generate_launch_description():
         "urdf",
         "h1.urdf",
     )
-
+    
     with open(
         h1_urdf_path,
         "r",
@@ -84,10 +84,13 @@ def generate_launch_description():
     )
 
     rviz_config = os.path.join(
-        bringup_share,
+        get_package_share_directory(
+            "humanoid_race_bringup"
+        ),
         "config",
-        "h1_lidar.rviz",
+        "h1_mppi_obstacle.rviz",
     )
+
 
     lidar_publisher_node = Node(
         package="h1_locomotion_bridge",
@@ -101,9 +104,9 @@ def generate_launch_description():
         executable="static_transform_publisher",
         name="lidar_static_transform",
         arguments=[
-            "--x", "0.0",
+            "--x", "0.12",
             "--y", "0.0",
-            "--z", "0.0",
+            "--z", "0.30",
             "--roll", "0.0",
             "--pitch", "0.0",
             "--yaw", "0.0",
@@ -113,6 +116,17 @@ def generate_launch_description():
         output="screen",
     )
 
+    # rviz_node = Node(
+    #     package="rviz2",
+    #     executable="rviz2",
+    #     name="h1_rviz",
+    #     arguments=[
+    #         "-d",
+    #         rviz_config,
+    #     ],
+    #     output="screen",
+    # )
+    
     rviz_node = Node(
         package="rviz2",
         executable="rviz2",
@@ -123,6 +137,7 @@ def generate_launch_description():
         ],
         output="screen",
     )
+
 
     robot_state_publisher_node = Node(
         package="robot_state_publisher",
@@ -167,6 +182,13 @@ def generate_launch_description():
         ),
     )
 
+    camera_bridge_node = Node(
+        package="h1_locomotion_bridge",
+        executable="camera_udp_publisher.py",
+        name="camera_bridge_node",
+        output="screen",
+    )
+    
     return LaunchDescription(
         [
             declare_use_waypoint_controller,
@@ -179,6 +201,7 @@ def generate_launch_description():
 
             lidar_publisher_node,
             odom_publisher_node,
+            camera_bridge_node,
 
             waypoint_vfh_controller,
 
