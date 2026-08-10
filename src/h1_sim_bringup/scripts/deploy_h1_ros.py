@@ -29,11 +29,11 @@ COMMAND_TIMEOUT_SECONDS = 1.0
 # Speed ramp limits.
 # Linear velocity changes by up to 0.30 m/s every second.
 # Turning velocity changes by up to 0.50 rad/s every second.
-LINEAR_ACCELERATION = 0.15
+LINEAR_ACCELERATION = 0.25
 ANGULAR_ACCELERATION = 0.25
 
 # Command safety limits
-MAX_FORWARD_SPEED = 1.00
+MAX_FORWARD_SPEED = 2.50
 MAX_BACKWARD_SPEED = 0.50
 MAX_SIDE_SPEED = 0.30
 MAX_YAW_SPEED = 0.50
@@ -1201,11 +1201,11 @@ def main():
                         data.site_xpos[lidar_sit_id][1]
                     )
 
-                    print(
-                        f"Position | "
-                        f"robot=({robot_x:.2f}, {robot_y:.2f}), "
-                        f"lidar=({lidar_x:.2f}, {lidar_y:.2f})"
-                    )
+                    # print(
+                    #     f"Position | "
+                    #     f"robot=({robot_x:.2f}, {robot_y:.2f}), "
+                    #     f"lidar=({lidar_x:.2f}, {lidar_y:.2f})"
+                    # )
 
                     
                     lidar_packet = struct.pack(
@@ -1243,13 +1243,13 @@ def main():
                     back_distance = float(
                         np.min(back_indices)
                     )
-                    print(
-                        "LiDAR scan | "
-                        f"front={front_distance:.2f} m, "
-                        f"left={left_distance:.2f} m, "
-                        f"right={right_distance:.2f} m, "
-                        f"back={back_distance:.2f} m"
-                    )                  
+                    # print(
+                    #     "LiDAR scan | "
+                    #     f"front={front_distance:.2f} m, "
+                    #     f"left={left_distance:.2f} m, "
+                    #     f"right={right_distance:.2f} m, "
+                    #     f"back={back_distance:.2f} m"
+                    # )                  
                     last_lidar_update_time = current_time
                     
                     
@@ -1306,19 +1306,19 @@ def main():
                         actual_speed * 3.6
                     )
 
-                    print(
-                        "Speed measurement | "
-                        f"commanded: "
-                        f"x={current_cmd[0]:.2f} m/s, "
-                        f"y={current_cmd[1]:.2f} m/s, "
-                        f"yaw={current_cmd[2]:.2f} rad/s | "
-                        f"actual: "
-                        f"x={actual_velocity_x:.2f} m/s, "
-                        f"y={actual_velocity_y:.2f} m/s, "
-                        f"yaw={actual_yaw_rate:.2f} rad/s, "
-                        f"total={actual_speed:.2f} m/s "
-                        f"({actual_speed_kmh:.2f} km/h)"
-                    )                    
+                    # print(
+                    #     "Speed measurement | "
+                    #     f"commanded: "
+                    #     f"x={current_cmd[0]:.2f} m/s, "
+                    #     f"y={current_cmd[1]:.2f} m/s, "
+                    #     f"yaw={current_cmd[2]:.2f} rad/s | "
+                    #     f"actual: "
+                    #     f"x={actual_velocity_x:.2f} m/s, "
+                    #     f"y={actual_velocity_y:.2f} m/s, "
+                    #     f"yaw={actual_yaw_rate:.2f} rad/s, "
+                    #     f"total={actual_speed:.2f} m/s "
+                    #     f"({actual_speed_kmh:.2f} km/h)"
+                    # )                    
                     previous_position = (
                         current_position
                     )

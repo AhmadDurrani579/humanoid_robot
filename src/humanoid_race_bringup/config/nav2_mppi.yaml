@@ -37,7 +37,7 @@ controller_server:
 
       motion_model: "DiffDrive"
 
-      vx_max: 0.65
+      vx_max: 1.50
       vx_min: 0.00
       vy_max: 0.00
       wz_max: 1.2
@@ -55,7 +55,7 @@ controller_server:
       temperature: 0.30
       gamma: 0.015
 
-      prune_distance: 1.7
+      prune_distance: 5.0
       transform_tolerance: 0.30
 
       visualize: true
@@ -154,8 +154,8 @@ local_costmap:
       robot_base_frame: pelvis
 
       rolling_window: true
-      width: 6
-      height: 6
+      width: 10
+      height: 10
       resolution: 0.05
 
       robot_radius: 0.40
