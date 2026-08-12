@@ -39,7 +39,7 @@ class CmdVelUdpBridge(Node):
 
         minimum_forward_speed = 0.30
         linear_speed_scale = 1.35
-        maximum_forward_command = 0.55
+        maximum_forward_command = 0.80
 
         if linear_x > 0.0:
             linear_x = max(

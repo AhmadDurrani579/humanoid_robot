@@ -30,10 +30,10 @@ COMMAND_TIMEOUT_SECONDS = 1.0
 # Linear velocity changes by up to 0.30 m/s every second.
 # Turning velocity changes by up to 0.50 rad/s every second.
 LINEAR_ACCELERATION = 0.25
-ANGULAR_ACCELERATION = 0.25
+ANGULAR_ACCELERATION = 0.15
 
 # Command safety limits
-MAX_FORWARD_SPEED = 2.50
+MAX_FORWARD_SPEED = 0.80
 MAX_BACKWARD_SPEED = 0.50
 MAX_SIDE_SPEED = 0.30
 MAX_YAW_SPEED = 0.50
@@ -81,7 +81,7 @@ ODOM_UDP_PORT = 15002
 
 ODOM_UPDATE_RATE = 30.0
 ODOM_UPDATE_INTERVAL = 1.0 / ODOM_UPDATE_RATE
-
+WALK_LATERAL_TRIM = -0.065
 
 def get_gravity_orientation(quaternion):
     """Calculate gravity orientation in the robot body frame."""
@@ -813,7 +813,7 @@ def main():
                                 MAX_FORWARD_SPEED,
                             ),
                             np.clip(
-                                linear_y,
+                                linear_y + WALK_LATERAL_TRIM,
                                 -MAX_SIDE_SPEED,
                                 MAX_SIDE_SPEED,
                             ),
@@ -822,7 +822,7 @@ def main():
                                 -MAX_YAW_SPEED,
                                 MAX_YAW_SPEED,
                             ),
-                        ]
+                        ]                  
                     last_command_time = time.monotonic()
                     command_timeout_active = False
                 # -------------------------------------
