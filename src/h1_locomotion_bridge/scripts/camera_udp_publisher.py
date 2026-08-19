@@ -154,22 +154,25 @@ class CameraBridgeNode(Node):
         message.width = IMAGE_WIDTH
         message.height = IMAGE_HEIGHT
 
-        horizontal_fov_degrees = 87.0
-        horizontal_fov_radians = np.deg2rad(
-            horizontal_fov_degrees
+        # Must match MuJoCo camera:
+        # <camera ... fovy="58" />
+        vertical_fov_degrees = 58.0
+        vertical_fov_radians = np.deg2rad(
+            vertical_fov_degrees
         )
 
-        focal_length_x = (
-            IMAGE_WIDTH
+        focal_length_y = (
+            IMAGE_HEIGHT
             / (
                 2.0
                 * np.tan(
-                    horizontal_fov_radians / 2.0
+                    vertical_fov_radians / 2.0
                 )
             )
         )
 
-        focal_length_y = focal_length_x
+        # MuJoCo perspective camera uses square pixels here.
+        focal_length_x = focal_length_y
 
         center_x = IMAGE_WIDTH / 2.0
         center_y = IMAGE_HEIGHT / 2.0
@@ -224,7 +227,8 @@ class CameraBridgeNode(Node):
         ]
 
         return message
-
+    
+    
     def publish_color(self, frame: bytes) -> None:
         if len(frame) != COLOR_BYTES:
             self.get_logger().warning(

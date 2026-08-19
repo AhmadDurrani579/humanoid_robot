@@ -163,7 +163,13 @@ local_costmap:
 
       plugins:
         - obstacle_layer
+        - voxel_layer
         - inflation_layer
+
+
+      # --------------------------------------------------
+      # 2D LiDAR - KEEP EXISTING STABLE CONFIGURATION
+      # --------------------------------------------------
 
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
@@ -180,6 +186,80 @@ local_costmap:
           raytrace_min_range: 0.0
           raytrace_max_range: 6.0
           max_obstacle_height: 2.0
+
+      # --------------------------------------------------
+      # RGB-D CAMERA - 3D VOXEL LAYER
+      # --------------------------------------------------
+
+      voxel_layer:
+        plugin: "nav2_costmap_2d::VoxelLayer"
+        enabled: true
+
+        footprint_clearing_enabled: true
+
+        # Enable temporarily so we can debug the 3D voxel map.
+        publish_voxel_map: true
+
+        # H1 navigation-relevant vertical space:
+        # 16 × 0.125 m = 2.0 m
+        origin_z: 0.0
+        z_resolution: 0.125
+        z_voxels: 16
+
+        min_obstacle_height: 0.15
+        max_obstacle_height: 2.0
+
+        unknown_threshold: 15
+        mark_threshold: 0
+
+        combination_method: 1
+
+        # Split into two sources off the SAME camera:
+        #   *_mark  -> what becomes an obstacle
+        #   *_clear -> what is allowed to raytrace free space
+        observation_sources: pointcloud_mark pointcloud_clear
+
+        pointcloud_mark:
+          topic: /camera/depth/points_realistic
+          # switch to /camera/depth/points_ground_filtered
+          # ONLY after the ground filter log is verified
+          data_type: "PointCloud2"
+          transport_type: "raw"
+
+          marking: true
+          clearing: false
+
+          min_obstacle_height: 0.15
+          max_obstacle_height: 2.0
+
+          obstacle_min_range: 0.60
+          obstacle_max_range: 5.0
+
+          raytrace_min_range: 0.60
+          raytrace_max_range: 6.0
+
+        pointcloud_clear:
+          topic: /camera/depth/points_realistic
+          data_type: "PointCloud2"
+          transport_type: "raw"
+
+          marking: false
+          clearing: true
+
+          # Ground points MUST survive ObservationBuffer::bufferCloud
+          # or there are no rays to clear the corridor with.
+          min_obstacle_height: -1.0
+          max_obstacle_height: 2.0
+
+          obstacle_min_range: 0.60
+          obstacle_max_range: 5.0
+
+          raytrace_min_range: 0.60
+          raytrace_max_range: 6.0
+
+      # --------------------------------------------------
+      # EXISTING INFLATION
+      # --------------------------------------------------
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"

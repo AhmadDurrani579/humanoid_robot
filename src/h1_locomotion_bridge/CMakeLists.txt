@@ -23,7 +23,8 @@ install(
     scripts/nav2_vfh_path_controller.py
     scripts/race_mission_node.py
     scripts/camera_udp_publisher.py
-
+    scripts/depth_sensor_model.py
+    scripts/depth_nav_resampler.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
