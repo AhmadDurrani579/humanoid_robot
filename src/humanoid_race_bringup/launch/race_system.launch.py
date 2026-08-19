@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 
 import os
-
 from ament_index_python.packages import get_package_share_directory
-
 from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
@@ -188,7 +186,165 @@ def generate_launch_description():
         name="camera_bridge_node",
         output="screen",
     )
+
+    # MuJoCo:
+    # pelvis -> camera_mount
+    # pos="0.12 0 0.48"
+    # euler="0 0.2094 0"
+    camera_mount_static_tf_node = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="camera_mount_static_transform",
+        arguments=[
+            "--x", "0.12",
+            "--y", "0.0",
+            "--z", "0.48",
+            "--roll", "0.0",
+            "--pitch", "0.2094",
+            "--yaw", "0.0",
+            "--frame-id", "pelvis",
+            "--child-frame-id", "camera_mount",
+        ],
+        output="screen",
+    )
+
+    # camera_mount -> ROS depth optical frame
+    #
+    # Camera position inside camera_mount:
+    # pos="0.050 0 0"
+    #
+    # ROS optical-frame convention:
+    # X = right
+    # Y = down
+    # Z = forward
+    camera_depth_static_tf_node = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="camera_depth_static_transform",
+        arguments=[
+            "--x", "0.05",
+            "--y", "0.0",
+            "--z", "0.0",
+            "--roll", "-1.57079632679",
+            "--pitch", "0.0",
+            "--yaw", "-1.57079632679",
+            "--frame-id", "camera_mount",
+            "--child-frame-id", "camera_depth_optical_frame",
+        ],
+        output="screen",
+    )
     
+    # ---------------------------------------------------------
+    # RGB-D NAVIGATION PERCEPTION PIPELINE
+    # ---------------------------------------------------------
+
+    depth_nav_resampler_node = Node(
+        package="h1_locomotion_bridge",
+        executable="depth_nav_resampler.py",
+        name="depth_nav_resampler",
+        output="screen",
+        parameters=[
+            {
+                "factor": 2,
+                "input_depth_topic": "/camera/depth/image_raw",
+                "input_info_topic": "/camera/depth/camera_info",
+                "output_depth_topic": "/camera/depth/image_nav",
+                "output_info_topic": "/camera/depth/camera_info_nav",
+
+                # Navigation-only corrected camera frame.
+                "output_frame": "camera_depth_nav_optical_frame",
+            }
+        ],
+    )
+    
+    nav_depth_sensor_model_node = Node(
+        package="h1_locomotion_bridge",
+        executable="depth_sensor_model.py",
+        name="nav_depth_sensor_model",
+        output="screen",
+        parameters=[
+            {
+                "input_topic": "/camera/depth/image_nav",
+                "output_topic": "/camera/depth/image_nav_realistic",
+            }
+        ],
+    )
+
+    realistic_pointcloud_node = Node(
+        package="depth_image_proc",
+        executable="point_cloud_xyz_node",
+        name="realistic_pointcloud_node",
+        output="screen",
+        remappings=[
+            (
+                "image_rect",
+                "/camera/depth/image_nav_realistic",
+            ),
+            (
+                "/camera/depth/camera_info",
+                "/camera/depth/camera_info_nav",
+            ),
+            (
+                "points",
+                "/camera/depth/points_realistic",
+            ),
+        ],
+    )
+    
+        # ---------------------------------------------------------
+    # NAVIGATION-ONLY CAMERA TF
+    # ---------------------------------------------------------
+    #
+    # EKF/Nav2 uses pelvis Z = 0 because two_d_mode is enabled.
+    #
+    # Actual MuJoCo standing pelvis height measured from /odom:
+    #   1.0300202369689941 m
+    #
+    # Physical camera mount above pelvis:
+    #   0.48 m
+    #
+    # Navigation camera mount height:
+    #   1.0300202369689941 + 0.48
+    #   = 1.5100202369689941 m
+    #
+    # This does NOT modify the original physical camera TF.
+    #
+
+    camera_nav_mount_static_tf_node = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="camera_nav_mount_static_transform",
+        arguments=[
+            "--x", "0.12",
+            "--y", "0.0",
+            "--z", "1.5100202369689941",
+            "--roll", "0.0",
+            "--pitch", "0.2094",
+            "--yaw", "0.0",
+            "--frame-id", "pelvis",
+            "--child-frame-id", "camera_nav_mount",
+        ],
+        output="screen",
+    )
+
+    camera_depth_nav_static_tf_node = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="camera_depth_nav_static_transform",
+        arguments=[
+            "--x", "0.05",
+            "--y", "0.0",
+            "--z", "0.0",
+            "--roll", "-1.57079632679",
+            "--pitch", "0.0",
+            "--yaw", "-1.57079632679",
+            "--frame-id", "camera_nav_mount",
+            "--child-frame-id", "camera_depth_nav_optical_frame",
+        ],
+        output="screen",
+    )
+    
+        
     return LaunchDescription(
         [
             declare_use_waypoint_controller,
@@ -206,6 +362,20 @@ def generate_launch_description():
             waypoint_vfh_controller,
 
             lidar_static_tf_node,
+            
+            camera_mount_static_tf_node,
+            camera_depth_static_tf_node,
+            
+            # Navigation-only corrected camera TF.
+            camera_nav_mount_static_tf_node,
+            camera_depth_nav_static_tf_node,
+            
+            # RGB-D navigation perception.
+
+            depth_nav_resampler_node,
+            nav_depth_sensor_model_node,
+            realistic_pointcloud_node,
+
             robot_state_publisher_node,
             joint_state_publisher_node,
             rviz_node,

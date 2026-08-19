@@ -4,11 +4,11 @@ ekf_filter_node:
     frequency: 30.0
     sensor_timeout: 0.2
     two_d_mode: true
-
+    transform_time_offset: 0.05
     publish_tf: true
 
     map_frame: map
-    odom_frame: world
+    odom_frame: world 
     base_link_frame: pelvis
     world_frame: world
 
