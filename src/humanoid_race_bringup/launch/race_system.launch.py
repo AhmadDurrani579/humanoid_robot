@@ -15,6 +15,7 @@ from launch.substitutions import (
 
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
+from ament_index_python.packages import get_package_prefix
 
 
 def generate_launch_description():
@@ -43,6 +44,12 @@ def generate_launch_description():
     use_waypoint_controller = LaunchConfiguration(
         "use_waypoint_controller"
     )
+    
+    
+    enable_reconstruction = LaunchConfiguration(
+        "enable_reconstruction"
+    )
+
 
     declare_use_waypoint_controller = DeclareLaunchArgument(
         "use_waypoint_controller",
@@ -51,6 +58,15 @@ def generate_launch_description():
             "Start the custom waypoint VFH controller"
         ),
     )
+    
+    declare_enable_reconstruction = DeclareLaunchArgument(
+        "enable_reconstruction",
+        default_value="true",
+        description=(
+            "Start persistent RGB-D 3D reconstruction"
+        ),
+    )
+
 
     h1_policy_script = PathJoinSubstitution(
         [
@@ -66,6 +82,20 @@ def generate_launch_description():
         shell=False,
     )
 
+    yolo_node = ExecuteProcess(
+        cmd=[
+            "/home/loq/yolo_ros2_env/bin/python",
+            os.path.join(
+                get_package_prefix("h1_locomotion_bridge"),
+                "lib",
+                "h1_locomotion_bridge",
+                "yolo_detector_node.py",
+            ),
+        ],
+        output="screen",
+        shell=False,
+    )            
+    
     cmd_vel_udp_bridge = Node(
         package="h1_locomotion_bridge",
         executable="cmd_vel_udp_bridge.py",
@@ -257,6 +287,13 @@ def generate_launch_description():
         ],
     )
     
+    semantic_depth_fusion_node = Node(
+        package="h1_locomotion_bridge",
+        executable="semantic_depth_fusion_node.py",
+        name="semantic_depth_fusion_node",
+        output="screen",
+    )
+    
     nav_depth_sensor_model_node = Node(
         package="h1_locomotion_bridge",
         executable="depth_sensor_model.py",
@@ -344,10 +381,104 @@ def generate_launch_description():
         output="screen",
     )
     
+    
+    # ---------------------------------------------------------
+    # RGB-D 3D RECONSTRUCTION
+    # ---------------------------------------------------------
+
+    rtab_rgb_relay_node = Node(
+        package="h1_locomotion_bridge",
+        executable="rtab_rgb_relay.py",
+        name="rtab_rgb_relay",
+        output="screen",
+        condition=IfCondition(
+            enable_reconstruction
+        ),
+    )
+
+
+    rtab_point_cloud_xyzrgb_node = Node(
+        package="rtabmap_util",
+        executable="point_cloud_xyzrgb",
+        name="rtab_point_cloud_xyzrgb",
+        output="screen",
+        parameters=[
+            {
+                "approx_sync": True,
+                "decimation": 1,
+
+                # Current tested value.
+                # Small voxel reduction to reduce duplicate points.
+                "voxel_size": 0.02,
+            }
+        ],
+        remappings=[
+            (
+                "rgb/image",
+                "/camera/color/image_rtab",
+            ),
+            (
+                "depth/image",
+                "/camera/depth/image_nav_realistic",
+            ),
+            (
+                "rgb/camera_info",
+                "/camera/depth/camera_info_nav",
+            ),
+            (
+                "cloud",
+                "/cloud",
+            ),
+        ],
+        condition=IfCondition(
+            enable_reconstruction
+        ),
+    )
+
+
+    rtab_point_cloud_assembler_node = Node(
+        package="rtabmap_util",
+        executable="point_cloud_assembler",
+        name="rtab_point_cloud_assembler",
+        output="screen",
+        parameters=[
+            {
+                # Keep newest 200 RGB-D clouds.
+                "max_clouds": 200,
+
+                # Do not reset the whole assembled cloud
+                # whenever max_clouds is reached.
+                "circular_buffer": True,
+
+                # Align incoming clouds using OUR TF tree.
+                "fixed_frame_id": "world",
+
+                # Publish final cloud directly in world.
+                "frame_id": "world",
+
+                # We already voxel-filter the live cloud above.
+                "voxel_size": 0.0,
+            }
+        ],
+        remappings=[
+            (
+                "cloud",
+                "/cloud",
+            ),
+            (
+                "assembled_cloud",
+                "/reconstruction/cloud_assembled",
+            ),
+        ],
+        condition=IfCondition(
+            enable_reconstruction
+        ),
+    )
         
     return LaunchDescription(
         [
             declare_use_waypoint_controller,
+            declare_enable_reconstruction,
 
             h1_policy,
             cmd_vel_udp_bridge,
@@ -375,7 +506,19 @@ def generate_launch_description():
             depth_nav_resampler_node,
             nav_depth_sensor_model_node,
             realistic_pointcloud_node,
+            
+            # Persistent RGB-D 3D reconstruction.
+            rtab_rgb_relay_node,
+            rtab_point_cloud_xyzrgb_node,
+            rtab_point_cloud_assembler_node,
 
+
+            # Yolo detector node.
+            # Semantic perception.
+
+            yolo_node,
+            semantic_depth_fusion_node,
+            
             robot_state_publisher_node,
             joint_state_publisher_node,
             rviz_node,

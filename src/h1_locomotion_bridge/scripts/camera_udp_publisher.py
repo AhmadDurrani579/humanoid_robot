@@ -4,7 +4,7 @@ import socket
 import struct
 import threading
 from typing import Optional, Tuple
-
+import time
 import numpy as np
 import rclpy
 from rclpy.node import Node
@@ -36,6 +36,9 @@ FRAME_TYPE_DEPTH = 2
 class FrameAssembler:
     def __init__(self) -> None:
         self.frames = {}
+        self.completed_color = 0
+        self.completed_depth = 0
+        self.last_report_time = time.monotonic()
 
     def add_chunk(
         self,
@@ -69,6 +72,24 @@ class FrameAssembler:
             for index in range(chunk_count)
         )
 
+        if frame_type == FRAME_TYPE_COLOR:
+            self.completed_color += 1
+        elif frame_type == FRAME_TYPE_DEPTH:
+            self.completed_depth += 1
+
+        now = time.monotonic()
+
+        if now - self.last_report_time >= 5.0:
+            print(
+                "UDP completed frames | "
+                f"color={self.completed_color} | "
+                f"depth={self.completed_depth}"
+            )
+
+            self.completed_color = 0
+            self.completed_depth = 0
+            self.last_report_time = now
+            
         del self.frames[key]
 
         old_keys = [
@@ -120,8 +141,23 @@ class CameraBridgeNode(Node):
 
         self.socket.setsockopt(
             socket.SOL_SOCKET,
+            socket.SO_RCVBUF,
+            4 * 1024 * 1024,
+        )
+
+        self.socket.setsockopt(
+            socket.SOL_SOCKET,
             socket.SO_REUSEADDR,
             1,
+        )
+        
+        actual_rcvbuf = self.socket.getsockopt(
+            socket.SOL_SOCKET,
+            socket.SO_RCVBUF,
+        )
+
+        self.get_logger().info(
+            f"Camera UDP receive buffer: {actual_rcvbuf} bytes"
         )
 
         self.socket.bind(
