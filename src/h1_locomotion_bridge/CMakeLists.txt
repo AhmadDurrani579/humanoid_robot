@@ -25,6 +25,9 @@ install(
     scripts/camera_udp_publisher.py
     scripts/depth_sensor_model.py
     scripts/depth_nav_resampler.py
+    scripts/yolo_detector_node.py
+    scripts/semantic_depth_fusion_node.py
+    scripts/rtab_rgb_relay.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
