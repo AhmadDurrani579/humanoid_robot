@@ -3,6 +3,10 @@ build/
 install/
 log/
 
+# ROS bags
+*.bag
+*.mcap
+
 # Python cache
 __pycache__/
 *.pyc
@@ -14,13 +18,19 @@ __pycache__/
 frames_*.gv
 frames_*.pdf
 
-# Python cache
-__pycache__/
-*.pyc
-
 # Local backup files
 *_backup.py
 *_working.py
 *_stable.py
 *_working.launch.py
 *_stable.yaml
+
+# Large ML models
+*.pt
+
+# Diagnostics
+diag/
+
+# Temporary files
+*.tmp
+*.swp
