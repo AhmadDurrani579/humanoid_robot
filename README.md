@@ -173,7 +173,7 @@ Pipeline:
 
 The Unitree H1 robot is evaluated inside a custom marathon-style navigation environment.
 
-![MuJoCo Marathon Environment](images/04_mujoco_h1_marathon_track.png)
+![MuJoCo Marathon Environment](docs/images/04_mujoco_h1_marathon_track.png)
 
 
 ---
@@ -182,7 +182,7 @@ The Unitree H1 robot is evaluated inside a custom marathon-style navigation envi
 
 The simulated RGB-D camera generates point cloud information for environmental understanding.
 
-![RGB-D Perception](images/02_nav2_rgbd_obstacle_detection.png)
+![RGB-D Perception](docs/images/02_nav2_rgbd_obstacle_detection.png)
 
 
 ---
