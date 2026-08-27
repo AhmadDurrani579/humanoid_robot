@@ -1,98 +1,73 @@
-# Unitree H1 Humanoid Navigation with ROS 2 Nav2 MPPI and RGB-D Voxel Perception
+# Unitree H1 Humanoid Navigation using ROS 2 Jazzy, MuJoCo and Nav2 MPPI
 
-A ROS 2 Jazzy based humanoid navigation framework for the **Unitree H1 robot** in **MuJoCo simulation**, integrating:
+## Overview
 
-- Nav2 MPPI controller
-- LiDAR-based obstacle navigation
-- RGB-D perception
-- 3D voxel obstacle representation
-- Persistent RGB-D 3D reconstruction
+This project implements autonomous navigation of a **Unitree H1 humanoid robot** in a MuJoCo simulation environment using **ROS 2 Jazzy** and the **Nav2 navigation framework**.
+
+The system combines classical navigation methods with RGB-D based perception to enable humanoid obstacle-aware navigation.
+
+The main components include:
+
+- Unitree H1 humanoid robot simulation
+- MuJoCo physics environment
+- ROS 2 Jazzy communication framework
+- Nav2 MPPI local controller
+- LiDAR-based navigation
+- RGB-D depth perception
+- 3D point cloud reconstruction
+- Nav2 VoxelLayer obstacle representation
 - Multi-goal race navigation framework
 
-The project explores autonomous navigation of a humanoid robot by combining classical navigation methods with RGB-D based environmental understanding.
 
 ---
 
-# Demonstrations
+# System Architecture
 
-## RGB-D 3D Reconstruction
-
-Coming soon.
-
-The robot builds a persistent 3D representation of the simulated environment using RGB-D perception.
-
-Pipeline:
+The complete navigation pipeline:
 
 ```
-RGB-D Camera
-      |
-      v
-Depth Point Cloud Generation
-      |
-      v
-RTABMap Point Cloud Processing
-      |
-      v
-Persistent 3D Reconstruction
-```
+                    MuJoCo Simulation
 
----
+                           |
+                           v
 
-## Nav2 MPPI Navigation with RGB-D VoxelLayer
+                    Unitree H1 Robot
 
-Coming soon.
+             -----------------------------
+             |                           |
+             v                           v
 
-The humanoid robot performs obstacle-aware navigation using:
+        LiDAR Sensor              RGB-D Camera
 
-```
-RGB-D Camera
-      |
-      v
-PointCloud2
-      |
-      v
-Nav2 VoxelLayer
-      |
-      v
-Local Costmap
-      |
-      v
-MPPI Controller
-      |
-      v
-Humanoid Motion
-```
+             |                           |
 
----
+          /scan              Depth PointCloud2
 
-# System Overview
+             |                           |
 
-The complete navigation architecture:
+     Nav2 ObstacleLayer        Nav2 VoxelLayer
 
-```
-                 MuJoCo Simulation
-                       |
-                       |
-                 Unitree H1 Robot
-                       |
-        --------------------------------
-        |                              |
-     LiDAR Sensor                 RGB-D Camera
-        |                              |
-      /scan                  Depth Point Cloud
-        |                              |
-        |                         VoxelLayer
-        |                              |
-        ----------- Local Costmap -------
-                       |
-                       |
+             |                           |
+
+             -------- Local Costmap -------
+
+                           |
+
+                           v
+
                  Nav2 MPPI Controller
-                       |
-                       |
-                    /cmd_vel
-                       |
-                       |
-              H1 Locomotion Bridge
+
+                           |
+
+                           v
+
+                      /cmd_vel
+
+                           |
+
+                           v
+
+                 H1 Locomotion Bridge
 ```
 
 ---
@@ -101,49 +76,141 @@ The complete navigation architecture:
 
 ## Humanoid Navigation
 
-- Unitree H1 humanoid robot simulation
-- ROS 2 Jazzy integration
-- MuJoCo based robot environment
-- Autonomous waypoint navigation
-- Race-style multi-goal navigation
-
-## Nav2 Integration
-
-- MPPI controller
-- Local costmap navigation
+- Autonomous Unitree H1 navigation
+- Multi-goal race navigation
 - Dynamic obstacle avoidance
-- LiDAR obstacle layer
-- RGB-D VoxelLayer integration
+- Nav2 based path planning
+- MPPI trajectory optimization
 
-## RGB-D and Semantic Perception
 
-- Depth camera simulation
+## RGB-D Perception
+
+The RGB-D camera provides depth information for environmental understanding.
+
+Capabilities:
+
+- Depth image processing
 - PointCloud2 generation
-- 3D voxel obstacle representation
-- Persistent environment reconstruction
-- Semantic object detection and depth fusion
+- 3D environment reconstruction
+- Obstacle perception
 
-## Sensor Fusion
 
-The system combines:
+## 3D Reconstruction
+
+The RGB-D pipeline generates a persistent 3D representation of the environment.
+
+Pipeline:
 
 ```
-LiDAR
- +
 RGB-D Camera
+
       |
+
       v
-Depth + RGB Processing
+
+Depth Point Cloud
+
       |
-      +------ YOLO Semantic Detection
-      |
+
       v
-Semantic Depth Fusion
+
+RTAB-Map Point Cloud Processing
+
       |
+
       v
-Navigation / Environment Understanding
+
+3D Environment Reconstruction
+```
+
+
+## Voxel-Based Navigation
+
+RGB-D point clouds are integrated into Nav2 using:
 
 ```
+nav2_costmap_2d::VoxelLayer
+```
+
+The voxel layer provides 3D obstacle information for local navigation.
+
+Pipeline:
+
+```
+/camera/depth/points_realistic
+
+             |
+
+             v
+
+        Nav2 VoxelLayer
+
+             |
+
+             v
+
+      3D Voxel Occupancy
+
+             |
+
+             v
+
+       Local Costmap
+
+             |
+
+             v
+
+      MPPI Controller
+```
+
+---
+
+# Visualization Results
+
+
+## MuJoCo Marathon Environment
+
+The Unitree H1 robot is evaluated inside a custom marathon-style navigation environment.
+
+![MuJoCo Marathon Environment](images/04_mujoco_h1_marathon_track.png)
+
+
+---
+
+## RGB-D Perception
+
+The simulated RGB-D camera generates point cloud information for environmental understanding.
+
+![RGB-D Perception](images/02_nav2_rgbd_obstacle_detection.png)
+
+
+---
+
+## Obstacle Scenario
+
+A simulated obstacle is introduced to evaluate perception and avoidance behaviour.
+
+![Obstacle Scenario](images/03_mujoco_h1_robot_obstacle_scene.png)
+
+
+---
+
+## Nav2 VoxelLayer Navigation
+
+The RGB-D point cloud is converted into a voxel representation and integrated into the Nav2 local costmap.
+
+![Voxel Navigation](images/06_rviz_voxel_layer_navigation.png)
+
+
+---
+
+## Obstacle Avoidance Result
+
+The robot successfully detects and avoids obstacles while following the navigation route.
+
+![Obstacle Avoidance](images/05_mujoco_h1_obstacle_avoidance_test.png)
+
 
 ---
 
@@ -154,17 +221,20 @@ Navigation / Environment Understanding
 Tested on:
 
 ```
-Ubuntu 22.04
+Ubuntu 24.04 LTS
 ```
 
-## ROS
+
+## ROS Framework
 
 ```
 ROS 2 Jazzy
 ```
 
+
 ## Main Dependencies
 
+- ROS 2 Jazzy
 - Nav2
 - RViz2
 - MuJoCo
@@ -172,9 +242,10 @@ ROS 2 Jazzy
 - CycloneDDS
 - Python 3
 
+
 ---
 
-# Workspace Setup
+# Installation
 
 Create ROS 2 workspace:
 
@@ -184,17 +255,15 @@ mkdir -p ~/humanoid_race_ws/src
 cd ~/humanoid_race_ws/src
 ```
 
+
 Clone repository:
 
 ```bash
 git clone <repository-url>
 ```
 
----
 
-# Install Dependencies
-
-From workspace:
+Install dependencies:
 
 ```bash
 cd ~/humanoid_race_ws
@@ -205,21 +274,20 @@ rosdep install \
 -r -y
 ```
 
----
 
-# Build
-
-Build the workspace:
+Build workspace:
 
 ```bash
 colcon build
 ```
 
-Source:
+
+Source workspace:
 
 ```bash
 source install/setup.bash
 ```
+
 
 ---
 
@@ -231,256 +299,127 @@ Set ROS domain:
 export ROS_DOMAIN_ID=5
 ```
 
-Launch the complete system:
+
+Launch the complete H1 navigation system:
 
 ```bash
 ros2 launch humanoid_race_bringup full_mppi_race.launch.py
 ```
 
-This starts:
+
+The launch file starts:
 
 - Unitree H1 simulation
-- Robot state publisher
 - Sensor bridges
 - TF system
+- RGB-D pipeline
 - Nav2 stack
 - MPPI controller
-- RGB-D perception pipeline
-- 3D reconstruction pipeline
+- Voxel-based obstacle navigation
 
----
-
-# RGB-D Reconstruction Pipeline
-
-The RGB-D reconstruction system generates a persistent 3D environment model.
-
-## Data Flow
-
-```
-Camera Depth Data
-
-        |
-        v
-
-/camera/depth/points_realistic
-
-        |
-        v
-
-RTABMap Point Cloud Processing
-
-        |
-        v
-
-/reconstruction/cloud_assembled
-```
-
-## Visualization in RViz
-
-Add:
-
-```
-/reconstruction/cloud_assembled
-```
-
-Display type:
-
-```
-PointCloud2
-```
-
-Frame:
-
-```
-world
-```
-
----
-
-# Navigation Perception Pipeline
-
-## LiDAR Navigation
-
-LiDAR provides 2D obstacle information.
-
-Topic:
-
-```
-/scan
-```
-
-Pipeline:
-
-```
-LaserScan
-    |
-    v
-ObstacleLayer
-    |
-    v
-Local Costmap
-```
-
----
-
-## RGB-D Voxel Navigation
-
-RGB-D provides 3D obstacle information.
-
-Topic:
-
-```
-/camera/depth/points_realistic
-```
-
-Pipeline:
-
-```
-PointCloud2
-
-      |
-      v
-
-Nav2 VoxelLayer
-
-      |
-      v
-
-3D Occupancy Voxels
-
-      |
-      v
-
-Local Costmap
-
-      |
-      v
-
-MPPI Controller
-```
 
 ---
 
 # Important ROS Topics
 
+
 ## Sensors
 
 | Topic | Description |
 |---|---|
-| `/scan` | LiDAR LaserScan |
+| `/scan` | LiDAR LaserScan data |
 | `/camera/depth/points_realistic` | RGB-D generated point cloud |
 
----
 
 ## Navigation
 
 | Topic | Description |
 |---|---|
-| `/local_costmap/costmap` | 2D navigation costmap |
-| `/local_costmap/voxel_grid` | 3D voxel representation |
-| `/cmd_vel` | Robot velocity command |
+| `/local_costmap/costmap` | 2D local costmap |
+| `/local_costmap/voxel_grid` | 3D voxel occupancy |
+| `/cmd_vel` | Velocity commands |
 
----
 
 ## Reconstruction
 
 | Topic | Description |
 |---|---|
-| `/reconstruction/cloud_assembled` | Persistent 3D reconstructed cloud |
+| `/reconstruction/cloud_assembled` | Persistent reconstructed point cloud |
+
 
 ---
 
-# RViz Visualization
+# Controller
 
-Recommended displays:
-
-## Navigation View
+The local navigation controller uses:
 
 ```
-/scan
-
-/local_costmap/costmap
-
-/local_costmap/voxel_grid
-
-MPPI trajectory
+Nav2 MPPI Controller
 ```
 
----
+MPPI provides:
 
-## Reconstruction View
+- Sampling based trajectory optimization
+- Smooth velocity generation
+- Real-time obstacle avoidance
+- Local path following
 
-```
-/reconstruction/cloud_assembled
-```
 
 ---
 
 # Results
 
-The system successfully demonstrates:
+The system demonstrates:
 
 ✅ Unitree H1 autonomous navigation  
-✅ ROS 2 Nav2 MPPI control  
-✅ LiDAR obstacle avoidance  
+✅ ROS 2 Jazzy integration  
+✅ Nav2 MPPI control  
 ✅ RGB-D obstacle perception  
-✅ Nav2 VoxelLayer integration  
-✅ Dynamic obstacle marking and clearing  
-✅ Persistent RGB-D 3D reconstruction  
-✅ Multi-goal navigation framework  
+✅ 3D voxel obstacle representation  
+✅ Dynamic obstacle avoidance  
+✅ Persistent RGB-D reconstruction  
+✅ Multi-goal navigation
+
 
 ---
 
-# Project Structure
+# Demo Videos
 
-```
-humanoid_race_ws/
+Coming soon:
 
-├── README.md
+## RGB-D 3D Reconstruction
 
-├── src/
+Demonstration of persistent environment reconstruction using RGB-D perception.
 
-│   ├── h1_locomotion_bridge
 
-│   └── humanoid_race_bringup
+## Nav2 MPPI + VoxelLayer Navigation
 
-├── docs/
+Demonstration of humanoid obstacle avoidance using RGB-D voxel perception.
 
-│   ├── images/
-
-│   └── videos/
-
-└── maps/
-
-```
 
 ---
 
 # Future Work
 
-Potential improvements:
+Possible improvements:
 
-- Deployment on real Unitree H1 hardware
-- Learning-based navigation
-- Footstep-aware humanoid planning
+- Real Unitree H1 hardware deployment
+- Improved humanoid locomotion integration
+- Learning-based navigation approaches
 - Large-scale outdoor navigation
-- Real-world RGB-D validation
+
 
 ---
 
 # License
 
-This project is released for research and educational purposes.
+This project is developed for research and educational purposes.
+
 
 ---
 
-# Acknowledgements
+# Author
 
-Built using:
+Ahmad
 
-- ROS 2
-- Nav2
-- MuJoCo
-- Unitree Robotics
-- RTAB-Map
-- Open-source robotics community
+Robotics | ROS 2 | Navigation | Computer Vision
