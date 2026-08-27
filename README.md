@@ -191,7 +191,7 @@ The simulated RGB-D camera generates point cloud information for environmental u
 
 A simulated obstacle is introduced to evaluate perception and avoidance behaviour.
 
-![Obstacle Scenario](images/03_mujoco_h1_robot_obstacle_scene.png)
+![Obstacle Scenario](docs/images/03_mujoco_h1_robot_obstacle_scene.png)
 
 
 ---
@@ -200,7 +200,7 @@ A simulated obstacle is introduced to evaluate perception and avoidance behaviou
 
 The RGB-D point cloud is converted into a voxel representation and integrated into the Nav2 local costmap.
 
-![Voxel Navigation](images/06_rviz_voxel_layer_navigation.png)
+![Voxel Navigation](docs/images/06_rviz_voxel_layer_navigation.png)
 
 
 ---
@@ -209,7 +209,7 @@ The RGB-D point cloud is converted into a voxel representation and integrated in
 
 The robot successfully detects and avoids obstacles while following the navigation route.
 
-![Obstacle Avoidance](images/05_mujoco_h1_obstacle_avoidance_test.png)
+![Obstacle Avoidance](docs/images/05_mujoco_h1_obstacle_avoidance_test.png)
 
 
 ---
