@@ -387,18 +387,12 @@ The system demonstrates:
 
 ## RGB-D 3D Reconstruction
 
-<video controls width="800">
-<source src="https://raw.githubusercontent.com/AhmadDurrani579/humanoid_robot/main/docs/videos/rgbd_3d_reconstruction_demo.mp4" type="video/mp4">
-</video>
+Demonstration of persistent environment reconstruction using RGB-D perception.
 
+Video:
 
----
+https://github.com/AhmadDurrani579/humanoid_robot/blob/main/docs/videos/rgbd_3d_reconstruction_demo.mp4
 
-## Nav2 MPPI + VoxelLayer Navigation
-
-<video controls width="800">
-<source src="https://raw.githubusercontent.com/AhmadDurrani579/humanoid_robot/main/docs/videos/nav2_mppi_voxel_obstacle_avoidance_demo.mp4" type="video/mp4">
-</video>
 
 ---
 
@@ -413,21 +407,12 @@ The robot uses:
 - Local costmap updates
 - MPPI trajectory optimization
 
-Video demonstration:
+Video:
 
-[Nav2 MPPI VoxelLayer Navigation Demo](docs/videos/nav2_mppi_voxel_obstacle_avoidance_demo.mp4)
-
-## RGB-D 3D Reconstruction
-
-Demonstration of persistent environment reconstruction using RGB-D perception.
-
-
-## Nav2 MPPI + VoxelLayer Navigation
-
-Demonstration of humanoid obstacle avoidance using RGB-D voxel perception.
-
+https://github.com/AhmadDurrani579/humanoid_robot/blob/main/docs/videos/nav2_mppi_voxel_obstacle_avoidance_demo.mp4
 
 ---
+
 
 # Future Work
 
