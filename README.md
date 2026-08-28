@@ -385,7 +385,32 @@ The system demonstrates:
 
 # Demo Videos
 
-Coming soon:
+
+## RGB-D 3D Reconstruction
+
+The RGB-D camera generates depth information and reconstructs the environment as a persistent 3D point cloud.
+
+Video demonstration:
+
+[RGB-D 3D Reconstruction Demo](docs/videos/rgbd_3d_reconstruction_demo.mp4)
+
+
+---
+
+## Nav2 MPPI + VoxelLayer Navigation
+
+This demonstration shows the Unitree H1 humanoid robot performing autonomous navigation with RGB-D based obstacle detection.
+
+The robot uses:
+
+- RGB-D point cloud perception
+- Nav2 VoxelLayer
+- Local costmap updates
+- MPPI trajectory optimization
+
+Video demonstration:
+
+[Nav2 MPPI VoxelLayer Navigation Demo](docs/videos/nav2_mppi_voxel_obstacle_avoidance_demo.mp4)
 
 ## RGB-D 3D Reconstruction
 
