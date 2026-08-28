@@ -385,15 +385,20 @@ The system demonstrates:
 
 # Demo Videos
 
-
 ## RGB-D 3D Reconstruction
 
-The RGB-D camera generates depth information and reconstructs the environment as a persistent 3D point cloud.
+<video controls width="800">
+<source src="https://raw.githubusercontent.com/AhmadDurrani579/humanoid_robot/main/docs/videos/rgbd_3d_reconstruction_demo.mp4" type="video/mp4">
+</video>
 
-Video demonstration:
 
-[RGB-D 3D Reconstruction Demo](docs/videos/rgbd_3d_reconstruction_demo.mp4)
+---
 
+## Nav2 MPPI + VoxelLayer Navigation
+
+<video controls width="800">
+<source src="https://raw.githubusercontent.com/AhmadDurrani579/humanoid_robot/main/docs/videos/nav2_mppi_voxel_obstacle_avoidance_demo.mp4" type="video/mp4">
+</video>
 
 ---
 
