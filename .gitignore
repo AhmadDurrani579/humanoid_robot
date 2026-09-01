@@ -34,3 +34,6 @@ diag/
 # Temporary files
 *.tmp
 *.swp
+# Temporary backup files
+*_backup_before_*
+*.backup*
