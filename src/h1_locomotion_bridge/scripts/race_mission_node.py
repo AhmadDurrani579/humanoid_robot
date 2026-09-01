@@ -16,7 +16,7 @@ from rclpy.action import ActionClient
 from rclpy.duration import Duration
 from rclpy.node import Node
 from tf2_ros import Buffer, TransformException, TransformListener
-
+from nav_msgs.msg import Odometry
 
 @dataclass(frozen=True)
 class RouteGoal:
@@ -45,7 +45,15 @@ class RaceMissionNode(Node):
         # Frames and Nav2 planner.
         self.global_frame = "map"
         self.robot_frame = "pelvis"
+        self.mission_failed = False
+        self.experiment_name = "H1 obstacle avoidance evaluation"
+        self.obstacle_condition = "baseline"
+        self.obstacle_position = "not_applicable"
 
+        self.falls = 0
+        self.recoveries = 0
+        
+        
         # Mission settings.
         self.goal_timeout = 240.0
         self.between_goal_delay = 0.10
@@ -97,6 +105,7 @@ class RaceMissionNode(Node):
                 tolerance=0.40,
             ),
         ]
+        
         self.navigation_client = ActionClient(
             self,
             NavigateToPose,
@@ -114,6 +123,18 @@ class RaceMissionNode(Node):
             self,
         )
 
+        self.path_length = 0.0
+        self.previous_x = None
+        self.previous_y = None
+
+        self.odom_sub = self.create_subscription(
+            Odometry,
+            "/odometry/filtered",
+            self.odom_callback,
+            10,
+        )
+        
+        
         self.current_goal_index = 0
         self.current_goal_start_time: float | None = None
         self.mission_start_time: float | None = None
@@ -132,14 +153,73 @@ class RaceMissionNode(Node):
             self.control_callback,
         )
 
+        # self.get_logger().info(
+        #     "MPPI race mission node started | "
+        #     f"goals={len(self.route)} | "
+        #     f"timeout={self.goal_timeout:.0f} s | "
+        #     f"navigation=NavigateToPose"
+        # )
+        
         self.get_logger().info(
-            "MPPI race mission node started | "
-            f"goals={len(self.route)} | "
-            f"timeout={self.goal_timeout:.0f} s | "
-            f"navigation=NavigateToPose"
+            "========================================"
+        )
+
+        self.get_logger().info(
+            "H1 NAVIGATION EXPERIMENT"
+        )
+
+        self.get_logger().info(
+            f"Experiment: {self.experiment_name}"
+        )
+
+        self.get_logger().info(
+            "Robot: Unitree H1"
+        )
+
+        self.get_logger().info(
+            "Simulator: MuJoCo"
+        )
+
+        self.get_logger().info(
+            "Controller: Nav2 MPPI"
+        )
+
+        self.get_logger().info(
+            f"Goal count: {len(self.route)}"
+        )
+
+        self.get_logger().info(
+            f"Obstacle condition: {self.obstacle_condition}"
+        )
+
+        self.get_logger().info(
+            f"Obstacle position: {self.obstacle_position}"
+        )
+
+        self.get_logger().info(
+            "========================================"
         )
 
 
+    def odom_callback(self, msg):
+
+        x = msg.pose.pose.position.x
+        y = msg.pose.pose.position.y
+
+        if self.previous_x is not None:
+
+            dx = x - self.previous_x
+            dy = y - self.previous_y
+
+            distance = math.sqrt(
+                dx * dx + dy * dy
+            )
+
+            self.path_length += distance
+
+        self.previous_x = x
+        self.previous_y = y
+        
     def get_robot_position(self) -> tuple[float, float] | None:
         """Read the robot position from map -> pelvis TF."""
 
@@ -592,8 +672,29 @@ class RaceMissionNode(Node):
         self.get_logger().info(
             f"Total lap time: {total_time:.2f} seconds"
         )
+        
         self.get_logger().info(
             "Mission result: SUCCESS"
+        )
+
+        self.get_logger().info(
+            f"Falls: {self.falls}"
+        )
+
+        self.get_logger().info(
+            f"Recoveries: {self.recoveries}"
+        )
+
+        self.get_logger().info(
+            f"Obstacle condition: {self.obstacle_condition}"
+        )
+
+        self.get_logger().info(
+            f"Obstacle position: {self.obstacle_position}"
+        )
+        
+        self.get_logger().info(
+            f"Path length: {self.path_length:.2f} m"
         )
         self.get_logger().info(
             "========================================"
